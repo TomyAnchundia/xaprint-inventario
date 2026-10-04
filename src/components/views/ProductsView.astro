@@ -1,0 +1,22 @@
+<section id="view-products" class="app-view hidden space-y-6" data-admin-only>
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div><p class="text-sm text-slate-500">Administra tu catálogo y niveles de stock</p><h2 class="mt-1 text-2xl font-bold tracking-tight">Catálogo de productos</h2></div>
+    <button id="open-product-modal" class="primary-button"><span class="text-lg leading-none">＋</span> Agregar producto</button>
+  </div>
+  <div class="panel-card overflow-hidden">
+    <div class="flex flex-col gap-3 border-b border-[#edf0ec] p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <label class="relative block w-full sm:max-w-sm">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span>
+        <input id="product-search" class="search-input pl-9" type="search" placeholder="Buscar por nombre o SKU..." />
+      </label>
+      <select id="category-filter" class="select-input sm:w-44" aria-label="Filtrar por categoría"><option value="">Todas las categorías</option></select>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="data-table">
+        <thead><tr><th>Producto</th><th>SKU</th><th>Código de barras</th><th>Categoría</th><th>Precio</th><th>Existencias</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="products-table"></tbody>
+      </table>
+    </div>
+    <p id="products-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">No encontramos productos con esos filtros.</p>
+  </div>
+</section>

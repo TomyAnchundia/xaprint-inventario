@@ -1,0 +1,105 @@
+---
+import Layout from "../layouts/Layout.astro";
+import DashboardHeader from "../components/DashboardHeader.astro";
+import InventoryDialogs from "../components/InventoryDialogs.astro";
+import Sidebar from "../components/Sidebar.astro";
+import MovementsView from "../components/views/MovementsView.astro";
+import OverviewView from "../components/views/OverviewView.astro";
+import PointOfSaleView from "../components/views/PointOfSaleView.astro";
+import ProductsView from "../components/views/ProductsView.astro";
+import SalesHistoryView from "../components/views/SalesHistoryView.astro";
+import SalesStatsView from "../components/views/SalesStatsView.astro";
+import CategoriesView from "../components/views/CategoriesView.astro";
+import UsersView from "../components/views/UsersView.astro";
+import CustomersView from "../components/views/CustomersView.astro";
+---
+
+<Layout>
+  <main id="login-screen" class="min-h-screen bg-slate-50">
+    <div class="grid min-h-screen lg:grid-cols-2">
+      <section class="relative hidden flex-col justify-between overflow-hidden bg-slate-900 p-10 text-white lg:flex">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c8ed76] text-lg font-black text-[#173d32]">X</div>
+          <div>
+            <p class="font-semibold">Xaprint</p>
+            <p class="text-xs text-slate-400">Control de inventario</p>
+          </div>
+        </div>
+        <div class="max-w-md">
+          <p class="mb-3 text-sm font-medium text-slate-400">Inventario y ventas</p>
+          <h1 class="text-4xl font-bold tracking-tight">Todo tu inventario, <span class="text-slate-400">bajo control.</span></h1>
+          <p class="mt-5 leading-7 text-slate-400">Gestiona productos, controla existencias y registra tus ventas desde un solo lugar.</p>
+        </div>
+        <p class="text-sm text-slate-500">Xaprint · Inventario</p>
+      </section>
+
+      <section class="flex items-center justify-center p-6 sm:p-10">
+        <div class="w-full max-w-md">
+          <div class="mb-5 flex justify-end">
+            <button
+              id="login-theme-toggle"
+              data-theme-toggle
+              class="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600"
+              type="button"
+              aria-label="Activar modo oscuro"
+              aria-pressed="false"
+            >
+              <span data-theme-icon aria-hidden="true">☾</span>
+              <span data-theme-label>Modo oscuro</span>
+            </button>
+          </div>
+          <div class="mb-8 lg:hidden">
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-lg font-black text-[#c8ed76]">X</div>
+              <div>
+                <p class="font-semibold text-slate-900">Xaprint</p>
+                <p class="text-xs text-slate-500">Control de inventario</p>
+              </div>
+            </div>
+          </div>
+          <div class="mb-8">
+            <h2 class="text-2xl font-bold tracking-tight text-slate-900">Iniciar sesión</h2>
+            <p class="mt-2 text-sm text-slate-500">Ingresa tus credenciales para continuar.</p>
+          </div>
+          <form id="login-form" class="space-y-5">
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-slate-700">Usuario</span>
+              <input name="username" type="text" autocomplete="username" required maxlength="50" placeholder="Ingresa tu usuario" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200" />
+            </label>
+            <label class="block">
+              <span class="mb-2 block text-sm font-medium text-slate-700">Contraseña</span>
+              <input name="password" type="password" autocomplete="current-password" required maxlength="128" placeholder="Ingresa tu contraseña" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200" />
+            </label>
+            <p id="login-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></p>
+            <button id="login-submit" type="submit" class="flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60">Iniciar sesión</button>
+          </form>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div id="dashboard-app" hidden class="min-h-screen lg:flex">
+    <Sidebar />
+    <div id="sidebar-scrim" class="fixed inset-0 z-20 hidden bg-slate-950/40 lg:hidden"></div>
+
+    <main class="min-w-0 flex-1 lg:ml-[260px]">
+      <DashboardHeader />
+      <div class="mx-auto max-w-[1500px] space-y-7 px-4 py-6 sm:px-7 sm:py-8 lg:px-10">
+        <OverviewView />
+        <ProductsView />
+        <CategoriesView />
+        <UsersView />
+        <CustomersView />
+        <MovementsView />
+        <PointOfSaleView />
+        <SalesHistoryView />
+        <SalesStatsView />
+      </div>
+    </main>
+    <InventoryDialogs />
+  </div>
+
+  <script>
+    import "../scripts/dashboard";
+  </script>
+</Layout>

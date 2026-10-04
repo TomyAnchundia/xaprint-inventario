@@ -1,0 +1,33 @@
+<section id="view-sales" class="app-view hidden space-y-6">
+  <div><p class="text-sm text-slate-500">Filtra, revisa y exporta las transacciones de tu negocio</p><h2 class="mt-1 text-2xl font-bold tracking-tight">Historial de ventas</h2></div>
+  <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <article class="metric-card compact-metric"><span class="metric-label">Total vendido</span><p id="history-total" class="metric-value">$0.00</p><p class="metric-note">Suma de ventas del período</p></article>
+    <article class="metric-card compact-metric"><span class="metric-label">Transacciones</span><p id="history-count" class="metric-value">0</p><p class="metric-note">Ventas registradas</p></article>
+    <article class="metric-card compact-metric"><span class="metric-label">Ticket promedio</span><p id="history-average" class="metric-value">$0.00</p><p class="metric-note">Venta media por transacción</p></article>
+    <article class="metric-card compact-metric"><span class="metric-label">Unidades vendidas</span><p id="history-units" class="metric-value">0</p><p class="metric-note">Artículos incluidos en ventas</p></article>
+  </div>
+  <article class="panel-card overflow-hidden">
+    <div class="space-y-4 border-b border-[#edf0ec] p-4 sm:p-5">
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_170px_170px_180px_auto]">
+        <label class="relative block"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span><input id="history-search" class="search-input pl-9" type="search" placeholder="Cliente, producto o n.º de venta..." /></label>
+        <label class="filter-label">Desde<input id="history-date-from" class="select-input mt-1" type="date" /></label>
+        <label class="filter-label">Hasta<input id="history-date-to" class="select-input mt-1" type="date" /></label>
+        <label class="filter-label">Método de pago<select id="history-payment" class="select-input mt-1"><option value="">Todos</option><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option></select></label>
+        <button id="clear-history-filters" class="secondary-button self-end">Limpiar filtros</button>
+      </div>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p id="history-result-count" class="text-xs text-slate-400">0 ventas</p>
+        <div class="flex items-center gap-2"><button class="secondary-button" data-go="pos">＋ Nueva venta</button><button id="export-sales-csv" class="primary-button">Exportar CSV</button></div>
+      </div>
+    </div>
+    <p id="history-date-error" class="hidden px-5 pb-3 text-xs font-medium text-rose-600">La fecha inicial no puede ser posterior a la fecha final.</p>
+    <div class="overflow-x-auto">
+      <table class="data-table">
+        <thead><tr><th>N.º venta</th><th>Cliente</th><th>Fecha y hora</th><th>Artículos</th><th>Método de pago</th><th class="text-right">Total</th><th class="text-right">Acciones</th></tr></thead>
+        <tbody id="sales-table"></tbody>
+      </table>
+    </div>
+    <p id="sales-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">No hay ventas para los filtros seleccionados.</p>
+  </article>
+  <p class="text-[11px] text-slate-400">Los indicadores muestran el total bruto vendido; no incluyen costos ni representan utilidad neta.</p>
+</section>

@@ -1,0 +1,53 @@
+<dialog id="product-modal" class="modal-card w-[min(460px,calc(100%-2rem))]">
+  <form id="product-form" method="dialog">
+    <div class="modal-heading"><div><h2 id="product-modal-title" class="text-lg font-bold">Nuevo producto</h2><p class="mt-1 text-xs text-slate-500">El SKU y el código de barras se generan automáticamente.</p></div><button type="button" class="modal-close" data-close="product-modal" aria-label="Cerrar">✕</button></div>
+    <div class="grid gap-4 p-5 sm:grid-cols-2">
+      <input name="productId" type="hidden" />
+      <label class="form-label sm:col-span-2">Nombre del producto<input class="form-input" name="name" required maxlength="80" placeholder="Ej. Camiseta clásica" /></label>
+      <label class="form-label">SKU automático<input id="product-sku-display" class="form-input bg-slate-50 font-mono" value="Se asignará al guardar" readonly /></label>
+      <label class="form-label">Categoría<select id="product-category" class="form-input" name="categoryId" required></select></label>
+      <label class="form-label">Precio ($)<input class="form-input" name="price" type="number" min="0.01" step="0.01" required placeholder="12.50" /></label>
+      <label class="form-label">Existencias<input class="form-input" name="stock" type="number" min="0" step="1" required placeholder="24" /></label>
+      <label class="form-label sm:col-span-2">Stock mínimo<input class="form-input" name="minStock" type="number" min="0" step="1" value="5" required /></label>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="product-modal">Cancelar</button><button id="save-product-button" type="submit" class="primary-button">Guardar producto</button></div>
+  </form>
+</dialog>
+
+<dialog id="movement-modal" class="modal-card w-[min(430px,calc(100%-2rem))]">
+  <form id="movement-form" method="dialog">
+    <div class="modal-heading"><div><h2 class="text-lg font-bold">Registrar movimiento</h2><p class="mt-1 text-xs text-slate-500">Ajusta las existencias de un producto.</p></div><button type="button" class="modal-close" data-close="movement-modal" aria-label="Cerrar">✕</button></div>
+    <div class="space-y-4 p-5">
+      <label class="form-label">Producto<select id="movement-product" class="form-input" name="productId" required></select></label>
+      <label class="form-label">Tipo de movimiento<select class="form-input" name="type"><option value="Ingreso">Ingreso</option><option value="Salida">Salida</option></select></label>
+      <label class="form-label">Cantidad<input class="form-input" name="quantity" type="number" min="1" step="1" required placeholder="1" /></label>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="movement-modal">Cancelar</button><button type="submit" class="primary-button">Guardar movimiento</button></div>
+  </form>
+</dialog>
+
+<dialog id="sale-confirm-modal" class="modal-card w-[min(560px,calc(100%-2rem))]">
+  <div id="sale-confirm-content"></div>
+</dialog>
+
+<dialog id="sale-receipt-modal" class="modal-card w-[min(500px,calc(100%-2rem))]">
+  <div id="sale-receipt-content"></div>
+</dialog>
+
+<dialog id="barcode-modal" class="modal-card w-[min(460px,calc(100%-2rem))]">
+  <div id="barcode-content"></div>
+</dialog>
+
+<dialog id="customer-modal" class="modal-card w-[min(430px,calc(100%-2rem))]">
+  <form id="customer-form" method="dialog">
+    <div class="modal-heading"><div><h2 id="customer-modal-title" class="text-lg font-bold">Nuevo cliente</h2><p id="customer-modal-description" class="mt-1 text-xs text-slate-500">Agrega los datos de contacto del cliente.</p></div><button type="button" class="modal-close" data-close="customer-modal" aria-label="Cerrar">✕</button></div>
+    <div class="space-y-4 p-5">
+      <input name="customerId" type="hidden" />
+      <label class="form-label">Nombre completo<input class="form-input" name="name" required maxlength="80" placeholder="Ej. María López" /></label>
+      <label class="form-label">Teléfono<input class="form-input" name="phone" type="tel" maxlength="20" required placeholder="099 123 4567" /></label>
+      <label class="form-label">Cédula (opcional)<input class="form-input" name="cedula" maxlength="20" placeholder="Número de cédula" /></label>
+      <label class="form-label">Dirección (opcional)<input class="form-input" name="direccion" maxlength="250" placeholder="Dirección del cliente" /></label>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button id="cancel-customer-form" type="button" class="secondary-button" data-close="customer-modal">Cancelar</button><button id="save-customer-button" type="submit" class="primary-button">Guardar cliente</button></div>
+  </form>
+</dialog>

@@ -1,0 +1,150 @@
+.modal-card {
+  position: fixed;
+  inset: 0;
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid #e8ece7;
+  border-radius: 17px;
+  padding: 0;
+  color: #25312a;
+  background: white;
+  box-shadow: 0 24px 80px rgb(12 28 20 / 20%);
+}
+
+.modal-card[open] {
+  animation: modal-enter 140ms ease-out;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #edf0ec;
+  padding: 18px 20px;
+}
+
+.modal-close {
+  display: flex;
+  height: 32px;
+  width: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #758078;
+  font-size: 13px;
+}
+
+.modal-close:hover {
+  background: #f2f5f1;
+}
+
+.form-label {
+  display: block;
+  color: #59665e;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.form-input {
+  display: block;
+  height: 40px;
+  margin-top: 7px;
+  padding: 0 11px;
+  font-size: 12px;
+  font-weight: 450;
+}
+
+.product-options {
+  position: relative;
+}
+
+.options-trigger {
+  display: flex;
+  height: 30px;
+  width: 30px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #718078;
+  font-size: 19px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.options-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.options-trigger:hover,
+.product-options[open] .options-trigger {
+  color: #1d5d43;
+  background: #edf6ef;
+}
+
+.options-menu {
+  position: absolute;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  width: 165px;
+  gap: 2px;
+  border: 1px solid #e8ece7;
+  border-radius: 10px;
+  padding: 5px;
+  background: white;
+  box-shadow: 0 10px 24px rgb(23 61 50 / 12%);
+}
+
+.options-menu button {
+  border-radius: 7px;
+  padding: 8px 9px;
+  color: #536159;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.options-menu button:hover {
+  background: #f5f7f4;
+}
+
+.request-status {
+  position: fixed;
+  z-index: 60;
+  top: 16px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  border: 1px solid #e3e9e2;
+  border-radius: 999px;
+  padding: 9px 15px;
+  color: #344139;
+  background: white;
+  box-shadow: 0 8px 26px rgb(12 28 20 / 14%);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.request-status[hidden] {
+  display: none;
+}
+
+.request-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #d8e5da;
+  border-top-color: #1d5d43;
+  border-radius: 50%;
+  animation: request-spin 700ms linear infinite;
+}
+
+@keyframes request-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

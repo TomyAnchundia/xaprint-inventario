@@ -1,0 +1,148 @@
+.product-tile {
+  min-width: 0;
+  border: 1px solid #edf0ec;
+  border-radius: 13px;
+  padding: 10px;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.product-tile:hover {
+  transform: translateY(-1px);
+  border-color: #b9d7c4;
+  box-shadow: 0 6px 18px rgb(23 61 50 / 6%);
+}
+
+.category-chip {
+  flex: none;
+  border: 1px solid #e5eae4;
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #6c7971;
+  background: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.category-chip.is-selected {
+  border-color: #1d5d43;
+  color: white;
+  background: #1d5d43;
+}
+
+.qty-button {
+  display: flex;
+  height: 25px;
+  width: 25px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e5eae4;
+  border-radius: 7px;
+  color: #526158;
+  background: white;
+  font-size: 13px;
+}
+
+.qty-button:hover:not(:disabled) {
+  border-color: #bdd9c6;
+  color: #1d5d43;
+}
+
+.qty-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.customer-picker {
+  position: relative;
+}
+
+.selected-customer.hidden,
+.customer-results.hidden {
+  display: none;
+}
+
+.selected-customer {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #d9e6dc;
+  border-radius: 9px;
+  padding: 6px 10px;
+  color: #344139;
+  background: #f7faf7;
+}
+
+.selected-customer span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.selected-customer strong {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-customer small {
+  color: #718078;
+  font-size: 10px;
+}
+
+.selected-customer button {
+  color: #718078;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.customer-results {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #e1e8e1;
+  border-radius: 10px;
+  background: white;
+  box-shadow: 0 12px 28px rgb(23 61 50 / 14%);
+}
+
+.customer-result {
+  display: grid;
+  width: 100%;
+  gap: 3px;
+  padding: 10px 12px;
+  color: #344139;
+  text-align: left;
+}
+
+.customer-result + .customer-result {
+  border-top: 1px solid #edf0ec;
+}
+
+.customer-result:hover {
+  background: #f4f8f4;
+}
+
+.customer-result span {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.customer-result small,
+.customer-no-results {
+  color: #829087;
+  font-size: 10px;
+}
+
+.customer-no-results {
+  padding: 14px 12px;
+}

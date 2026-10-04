@@ -1,0 +1,39 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "Xaprint Inventario" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Prototipo independiente de inventario y ventas de Xaprint."
+    />
+    <title>{title}</title>
+    <script is:inline>
+      const inventoryTheme = localStorage.getItem("xaprint-inventario-theme");
+      document.documentElement.dataset.theme = inventoryTheme === "dark" ? "dark" : "light";
+    </script>
+  </head>
+  <body>
+    <slot />
+    <div id="request-status" class="request-status" role="status" aria-live="polite" hidden>
+      <span class="request-spinner" aria-hidden="true"></span>
+      <span>Procesando...</span>
+    </div>
+    <div
+      id="toast"
+      class="pointer-events-none fixed right-4 top-4 z-50 translate-y-[-8px] rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white opacity-0 shadow-xl transition-all"
+      role="status"
+      aria-live="polite"
+    ></div>
+  </body>
+</html>

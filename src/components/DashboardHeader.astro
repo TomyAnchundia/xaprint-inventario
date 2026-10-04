@@ -1,0 +1,45 @@
+<header
+  class="sticky top-0 z-10 flex h-[78px] items-center justify-between border-b border-[#e8ece7] bg-[#f8faf7]/95 px-4 backdrop-blur sm:px-7 lg:px-10"
+>
+  <div class="flex min-w-0 items-center gap-3">
+    <button
+      id="open-sidebar"
+      class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#e2e8e1] bg-white text-lg text-slate-700 lg:hidden"
+      aria-label="Abrir menú"
+    >☰</button>
+    <div class="min-w-0">
+      <p class="hidden text-[11px] font-medium text-slate-400 sm:block">
+        Xaprint <span class="px-1">/</span><span id="breadcrumb-title">Resumen</span>
+      </p>
+      <h1 id="page-title" class="truncate text-lg font-bold text-[#19241e] sm:mt-1 sm:text-xl">
+        Resumen
+      </h1>
+    </div>
+  </div>
+  <div class="flex items-center gap-3">
+    <button
+      id="theme-toggle"
+      data-theme-toggle
+      class="flex h-10 items-center gap-2 rounded-xl border border-[#e3e9e2] bg-white px-3 text-xs font-semibold text-slate-600"
+      type="button"
+      aria-label="Activar modo oscuro"
+      aria-pressed="false"
+    >
+      <span data-theme-icon aria-hidden="true">☾</span>
+      <span class="hidden sm:inline" data-theme-label>Modo oscuro</span>
+    </button>
+    <div class="hidden items-center gap-2 rounded-full border border-[#e3e9e2] bg-white px-3 py-2 sm:flex">
+      <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+      <span class="text-[11px] font-medium text-slate-500">Base de datos conectada</span>
+    </div>
+    <button
+      class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#e3e9e2] bg-white text-slate-500"
+      aria-label="Notificaciones"
+    >
+      <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path>
+      </svg>
+      <span class="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-orange-400"></span>
+    </button>
+  </div>
+</header>

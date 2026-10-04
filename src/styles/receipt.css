@@ -1,0 +1,114 @@
+.receipt-field-label {
+  color: #98a29b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.receipt-field-value {
+  margin-top: 4px;
+  color: #344139;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.sale-receipt {
+  margin: 20px auto;
+  width: min(100% - 40px, 390px);
+  color: #25312a;
+}
+
+.receipt-brand {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  border-bottom: 1px dashed #d9e1da;
+  padding: 2px 0 16px;
+}
+
+.receipt-brand strong {
+  color: #173d32;
+  font-size: 21px;
+  letter-spacing: 0.18em;
+}
+
+.receipt-brand span {
+  color: #87928b;
+  font-size: 11px;
+}
+
+.receipt-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 18px;
+  border-bottom: 1px dashed #d9e1da;
+  padding: 15px 0;
+}
+
+.receipt-meta div {
+  display: grid;
+  gap: 3px;
+}
+
+.receipt-meta span,
+.receipt-line-heading {
+  color: #87928b;
+  font-size: 10px;
+}
+
+.receipt-meta strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.receipt-lines {
+  border-bottom: 1px dashed #d9e1da;
+  padding: 8px 0;
+}
+
+.receipt-line {
+  display: grid;
+  grid-template-columns: 1fr 42px 88px;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 0;
+  font-size: 11px;
+}
+
+.receipt-line > :nth-child(2) {
+  text-align: center;
+}
+
+.receipt-line > :last-child {
+  text-align: right;
+}
+
+.receipt-line small {
+  display: block;
+  margin-top: 3px;
+  color: #98a29b;
+  font-size: 9px;
+}
+
+.receipt-line-heading {
+  padding-top: 2px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.receipt-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 15px 0 7px;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.receipt-thanks {
+  margin: 12px 0 0;
+  color: #87928b;
+  text-align: center;
+  font-size: 10px;
+}
+

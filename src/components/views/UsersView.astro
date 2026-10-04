@@ -1,0 +1,52 @@
+<section id="view-users" class="app-view hidden space-y-6" data-admin-only>
+  <div>
+    <p class="text-sm text-slate-500">Administra el acceso al sistema de inventario</p>
+    <h2 class="mt-1 text-2xl font-bold tracking-tight">Usuarios de inventario</h2>
+  </div>
+
+  <div class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <article class="panel-card overflow-hidden">
+      <div class="panel-heading">
+        <div>
+          <h3 class="panel-title">Cuentas registradas</h3>
+          <p class="panel-caption">Los cambios de rol se aplican en el siguiente inicio de sesión.</p>
+        </div>
+        <span id="inventory-user-count" class="text-xs font-medium text-slate-400">0 usuarios</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="data-table">
+          <thead><tr><th>Usuario</th><th>Rol</th><th>Creado</th><th class="text-right">Acciones</th></tr></thead>
+          <tbody id="inventory-users-table"></tbody>
+        </table>
+      </div>
+      <p id="inventory-users-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">No hay otros usuarios registrados.</p>
+    </article>
+
+    <article class="panel-card">
+      <form id="inventory-user-form">
+        <div class="panel-heading">
+          <div>
+            <h3 id="inventory-user-form-title" class="panel-title">Nuevo usuario</h3>
+            <p class="panel-caption">Las contraseñas se almacenan protegidas.</p>
+          </div>
+        </div>
+        <div class="space-y-4 px-5 pb-5">
+          <input name="userId" type="hidden" />
+          <label class="form-label">Nombre de usuario<input id="inventory-user-name" class="form-input" name="username" required maxlength="50" autocomplete="off" /></label>
+          <label class="form-label">Contraseña<input id="inventory-user-password" class="form-input" name="password" type="password" minlength="8" maxlength="128" autocomplete="new-password" /></label>
+          <p id="inventory-user-password-help" class="hidden -mt-2 text-[10px] text-slate-400">Déjala vacía para conservar la contraseña actual.</p>
+          <label class="form-label">Rol
+            <select class="form-input" name="rol" required>
+              <option value="NORMAL">Usuario normal</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </label>
+          <div class="flex justify-end gap-2">
+            <button id="cancel-inventory-user-edit" type="button" class="secondary-button hidden">Cancelar</button>
+            <button id="save-inventory-user-button" type="submit" class="primary-button">Crear usuario</button>
+          </div>
+        </div>
+      </form>
+    </article>
+  </div>
+</section>

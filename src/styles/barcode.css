@@ -1,0 +1,15 @@
+.barcode-preview {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 18px 28px 0;
+  background: white;
+}
+
+.barcode-preview svg {
+  display: block;
+  max-width: 100%;
+}
+

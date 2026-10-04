@@ -1,0 +1,73 @@
+<aside
+  id="sidebar"
+  class="fixed inset-y-0 left-0 z-30 flex w-[260px] -translate-x-full flex-col bg-[#173d32] text-white transition-transform lg:translate-x-0"
+>
+  <div class="flex h-[78px] items-center gap-3 border-b border-white/10 px-6">
+    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c8ed76] text-lg font-black text-[#173d32]">
+      X
+    </div>
+    <div>
+      <p class="text-sm font-extrabold tracking-[0.16em]">XAPRINT</p>
+      <p class="mt-0.5 text-[11px] text-emerald-100/65">INVENTARIO</p>
+    </div>
+    <button
+      id="close-sidebar"
+      class="ml-auto rounded-lg p-2 text-white/70 hover:bg-white/10 lg:hidden"
+      aria-label="Cerrar menú"
+    >✕</button>
+  </div>
+
+  <nav class="scrollbar-thin flex-1 space-y-7 overflow-y-auto px-4 py-7">
+    <div>
+      <p class="px-3 pb-2 text-[10px] font-bold tracking-[0.18em] text-emerald-100/45">GENERAL</p>
+      <button class="nav-link is-active" data-view="overview" data-title="Resumen">
+        <span class="nav-icon">◫</span>Resumen
+      </button>
+    </div>
+    <div data-admin-only>
+      <p class="px-3 pb-2 text-[10px] font-bold tracking-[0.18em] text-emerald-100/45">INVENTARIO</p>
+      <button class="nav-link" data-view="products" data-title="Productos">
+        <span class="nav-icon">▦</span>Productos
+        <span id="sidebar-product-count" class="ml-auto rounded-md bg-white/10 px-2 py-0.5 text-[10px]">0</span>
+      </button>
+      <button class="nav-link" data-view="categories" data-title="Categorías">
+        <span class="nav-icon">◈</span>Categorías
+      </button>
+      <button class="nav-link" data-view="users" data-title="Usuarios">
+        <span class="nav-icon">♙</span>Usuarios
+      </button>
+      <button class="nav-link" data-view="customers" data-title="Clientes">
+        <span class="nav-icon">♧</span>Clientes
+      </button>
+      <button class="nav-link" data-view="movements" data-title="Movimientos">
+        <span class="nav-icon">⇄</span>Movimientos
+      </button>
+    </div>
+    <div>
+      <p class="px-3 pb-2 text-[10px] font-bold tracking-[0.18em] text-emerald-100/45">VENTAS</p>
+      <button class="nav-link" data-view="pos" data-title="Nueva venta">
+        <span class="nav-icon">＋</span>Nueva venta
+      </button>
+      <button class="nav-link" data-view="sales" data-title="Historial de ventas">
+        <span class="nav-icon">▤</span>Historial
+      </button>
+      <button class="nav-link" data-view="sales-stats" data-title="Estadísticas de ventas" data-admin-only>
+        <span class="nav-icon">▥</span>Estadísticas
+      </button>
+    </div>
+  </nav>
+
+  <div class="border-t border-white/10 p-4">
+    <div class="flex items-center gap-3 rounded-xl bg-white/[0.07] p-3">
+      <div class="flex h-9 w-9 items-center justify-center rounded-full bg-[#d8edc5] text-xs font-bold text-[#173d32]">
+        AD
+      </div>
+      <div class="min-w-0">
+        <p id="sidebar-username" class="truncate text-xs font-semibold">Usuario</p>
+        <p id="sidebar-role" class="mt-0.5 text-[10px] text-emerald-100/60">Inventario</p>
+      </div>
+      <span class="ml-auto h-2 w-2 rounded-full bg-[#c8ed76]"></span>
+    </div>
+    <button id="logout-button" class="mt-3 w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-emerald-100/70 hover:bg-white/10 hover:text-white">Cerrar sesión</button>
+  </div>
+</aside>

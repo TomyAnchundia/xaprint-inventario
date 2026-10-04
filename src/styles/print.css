@@ -1,0 +1,65 @@
+@keyframes modal-enter {
+  from { opacity: 0; transform: translateY(5px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  #barcode-modal[open],
+  #barcode-modal[open] *,
+  #sale-receipt-modal[open],
+  #sale-receipt-modal[open] *,
+  #sale-confirm-modal[open],
+  #sale-confirm-modal[open] * {
+    visibility: visible !important;
+  }
+
+  #barcode-modal[open],
+  #sale-receipt-modal[open] {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    border: 0;
+    box-shadow: none;
+  }
+
+  #sale-receipt-modal[open] {
+    inset: 0 auto auto 0;
+    width: 80mm;
+    max-width: 80mm;
+    margin: 0;
+  }
+
+  #sale-confirm-modal[open] {
+    display: none;
+  }
+
+  #sale-receipt-modal .receipt-actions,
+  #sale-receipt-modal .receipt-actions-heading {
+    display: none !important;
+  }
+
+  #sale-receipt-modal .sale-receipt {
+    width: 100%;
+    margin: 0;
+    padding: 4mm;
+  }
+
+  #barcode-modal .modal-heading button,
+  #barcode-modal .modal-heading p,
+  #barcode-modal .modal-heading + .barcode-preview + p + div {
+    display: none !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .data-table th,
+  .data-table td {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "frontend-inventario",
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.3",
+    "jsbarcode": "^3.12.3",
+    "jspdf": "^4.2.1",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/jsbarcode": "^3.11.4",
+    "typescript": "^7.0.2"
+  }
+}

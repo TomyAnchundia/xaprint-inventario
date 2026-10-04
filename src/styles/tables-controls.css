@@ -1,0 +1,62 @@
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table th {
+  border-top: 1px solid #f0f2ef;
+  border-bottom: 1px solid #edf0ec;
+  background: #fafbf9;
+  padding: 11px 20px;
+  color: #98a29b;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  border-bottom: 1px solid #f0f2ef;
+  padding: 13px 20px;
+  font-size: 12px;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.data-table tbody tr:hover {
+  background: #fbfcfa;
+}
+
+.search-input,
+.select-input,
+.form-input {
+  width: 100%;
+  border: 1px solid #e4e9e3;
+  border-radius: 9px;
+  outline: none;
+  color: #344139;
+  background: white;
+}
+
+.search-input,
+.select-input {
+  height: 40px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.search-input::placeholder {
+  color: #a2aca5;
+}
+
+.search-input:focus,
+.select-input:focus,
+.form-input:focus {
+  border-color: #76ae8c;
+  box-shadow: 0 0 0 3px rgb(69 142 98 / 10%);
+}
+

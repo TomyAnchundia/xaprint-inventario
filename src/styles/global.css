@@ -1,0 +1,277 @@
+@import "tailwindcss";
+@import "./components.css";
+
+:root {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #18211d;
+  background: #f4f6f3;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 360px;
+  min-height: 100vh;
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: #123c30;
+  background: #cce9dc;
+}
+
+html[data-theme="dark"] body,
+html[data-theme="dark"] #dashboard-app,
+html[data-theme="dark"] #login-screen {
+  color: #e3ebe5;
+  background: #111a15;
+}
+
+html[data-theme="dark"] header {
+  border-color: #2b3830;
+  background: rgb(23 34 28 / 95%);
+}
+
+html[data-theme="dark"] .panel-card,
+html[data-theme="dark"] .metric-card,
+html[data-theme="dark"] .modal-card,
+html[data-theme="dark"] .request-status,
+html[data-theme="dark"] .bg-white {
+  border-color: #2b3830;
+  color: #e3ebe5;
+  background-color: #1b2820;
+}
+
+html[data-theme="dark"] .data-table th,
+html[data-theme="dark"] .data-table tbody tr:hover,
+html[data-theme="dark"] .secondary-button,
+html[data-theme="dark"] .modal-close:hover,
+html[data-theme="dark"] .options-menu,
+html[data-theme="dark"] .options-menu button:hover {
+  border-color: #2b3830;
+  color: #d3ded6;
+  background: #202e25;
+}
+
+html[data-theme="dark"] .data-table td,
+html[data-theme="dark"] .data-table th,
+html[data-theme="dark"] .modal-heading {
+  border-color: #2b3830;
+}
+
+html[data-theme="dark"] .data-table td,
+html[data-theme="dark"] .panel-title,
+html[data-theme="dark"] .metric-value,
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3,
+html[data-theme="dark"] .form-label,
+html[data-theme="dark"] [class~="text-slate-900"],
+html[data-theme="dark"] [class~="text-slate-700"],
+html[data-theme="dark"] [class~="text-slate-600"],
+html[data-theme="dark"] [class~="text-slate-500"] {
+  color: #d3ded6;
+}
+
+html[data-theme="dark"] [class~="text-slate-400"],
+html[data-theme="dark"] .panel-caption,
+html[data-theme="dark"] .metric-label,
+html[data-theme="dark"] .metric-note,
+html[data-theme="dark"] .filter-label {
+  color: #91a197;
+}
+
+html[data-theme="dark"] .search-input,
+html[data-theme="dark"] .select-input,
+html[data-theme="dark"] .form-input,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select {
+  border-color: #35443a;
+  color: #e3ebe5;
+  background-color: #17221c;
+}
+
+html[data-theme="dark"] .form-input.bg-slate-50 {
+  background-color: #202e25;
+}
+
+html[data-theme="dark"] [data-theme-toggle] {
+  border-color: #35443a;
+  color: #d3ded6;
+  background: #202e25;
+}
+
+html[data-theme="dark"] .secondary-button {
+  border: 1px solid #35443a;
+}
+
+html[data-theme="dark"] #dashboard-app {
+  color: #d3ded6;
+}
+
+html[data-theme="dark"] .product-tile {
+  border-color: #35443a;
+  color: #d3ded6;
+  background: #1b2820;
+}
+
+html[data-theme="dark"] .product-tile:hover {
+  border-color: #638b70;
+  background: #202e25;
+}
+
+html[data-theme="dark"] .product-tile > div:first-child,
+html[data-theme="dark"] #cart-items .rounded-lg,
+html[data-theme="dark"] #low-stock-list .rounded-lg {
+  color: #d3ded6;
+  background: #2a3b30;
+}
+
+html[data-theme="dark"] #view-pos aside > .space-y-3 {
+  border-color: #2b3830;
+  color: #d3ded6;
+  background: #17231c;
+}
+
+html[data-theme="dark"] #view-pos aside > .space-y-3 > div:first-child {
+  border-color: #2b3830;
+  background: #1b2820;
+}
+
+html[data-theme="dark"] [class~="bg-[#fafbf9]"],
+html[data-theme="dark"] [class~="bg-[#f7f9f6]"],
+html[data-theme="dark"] [class~="bg-[#edf2ed]"],
+html[data-theme="dark"] [class~="bg-slate-50"],
+html[data-theme="dark"] [class~="bg-slate-100"],
+html[data-theme="dark"] [class~="bg-white"] {
+  color: #d3ded6;
+  background-color: #202e25;
+}
+
+html[data-theme="dark"] .customer-results,
+html[data-theme="dark"] .selected-customer {
+  border-color: #35443a;
+  color: #d3ded6;
+  background: #1b2820;
+}
+
+html[data-theme="dark"] .customer-result {
+  color: #d3ded6;
+  background: #1b2820;
+}
+
+html[data-theme="dark"] .customer-result:hover,
+html[data-theme="dark"] .customer-result + .customer-result {
+  border-color: #35443a;
+  background: #202e25;
+}
+
+html[data-theme="dark"] .customer-result small,
+html[data-theme="dark"] .selected-customer small,
+html[data-theme="dark"] .customer-no-results {
+  color: #91a197;
+}
+
+html[data-theme="dark"] .qty-button,
+html[data-theme="dark"] .category-chip {
+  border-color: #35443a;
+  color: #c3d1c7;
+  background: #1b2820;
+}
+
+html[data-theme="dark"] .category-chip.is-selected {
+  border-color: #80ad8d;
+  color: #12261a;
+  background: #a7d3a8;
+}
+
+html[data-theme="dark"] .receipt-field-value {
+  color: #d3ded6;
+}
+
+html[data-theme="dark"] #dashboard-app [class*="bg-emerald-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-green-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-sky-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-blue-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-orange-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-amber-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-violet-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-teal-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-rose-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-red-"],
+html[data-theme="dark"] #dashboard-app [class*="bg-lime-"] {
+  background-color: #29382e;
+}
+
+html[data-theme="dark"] #dashboard-app [class*="text-emerald-"],
+html[data-theme="dark"] #dashboard-app [class*="text-green-"],
+html[data-theme="dark"] #dashboard-app [class*="text-sky-"],
+html[data-theme="dark"] #dashboard-app [class*="text-blue-"],
+html[data-theme="dark"] #dashboard-app [class*="text-orange-"],
+html[data-theme="dark"] #dashboard-app [class*="text-amber-"],
+html[data-theme="dark"] #dashboard-app [class*="text-violet-"],
+html[data-theme="dark"] #dashboard-app [class*="text-teal-"],
+html[data-theme="dark"] #dashboard-app [class*="text-rose-"],
+html[data-theme="dark"] #dashboard-app [class*="text-red-"],
+html[data-theme="dark"] #dashboard-app [class*="text-lime-"] {
+  color: #b9dfc0;
+}
+
+html[data-theme="dark"] #dashboard-app [class*="border-[#"],
+html[data-theme="dark"] #dashboard-app [class*="divide-[#"] {
+  border-color: #35443a;
+}
+
+html[data-theme="dark"] #dashboard-app main [class*="bg-[#"] {
+  color: #d3ded6;
+  background-color: #202e25;
+}
+
+html[data-theme="dark"] #dashboard-app .text-\[\#9aa49e\],
+html[data-theme="dark"] #dashboard-app .text-\[\#98a29b\],
+html[data-theme="dark"] #dashboard-app .text-\[\#87928b\] {
+  color: #91a197;
+}
+
+html[data-theme="dark"] #dashboard-app .text-\[\#19241e\],
+html[data-theme="dark"] #dashboard-app .text-\[\#25312a\],
+html[data-theme="dark"] #dashboard-app .text-\[\#344139\] {
+  color: #d3ded6;
+}
+
+html[data-theme="dark"] #dashboard-app .text-\[\#1e6047\],
+html[data-theme="dark"] #dashboard-app .text-\[\#1d5d43\],
+html[data-theme="dark"] #dashboard-app .text-\[\#287052\] {
+  color: #9fd1ae;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5cf transparent;
+}
+
+dialog::backdrop {
+  background: rgb(18 32 25 / 35%);
+  backdrop-filter: blur(3px);
+}

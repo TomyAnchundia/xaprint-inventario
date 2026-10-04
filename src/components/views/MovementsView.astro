@@ -1,0 +1,18 @@
+<section id="view-movements" class="app-view hidden space-y-6" data-admin-only>
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <div><p class="text-sm text-slate-500">Entradas y salidas del inventario</p><h2 class="mt-1 text-2xl font-bold tracking-tight">Movimientos</h2></div>
+    <button id="open-movement-modal" class="primary-button"><span class="text-lg leading-none">＋</span> Registrar movimiento</button>
+  </div>
+  <article class="panel-card overflow-hidden">
+    <div class="panel-heading">
+      <div><h3 class="panel-title">Registro de actividad</h3><p class="panel-caption">Historial de cambios en existencias</p></div>
+      <span id="movement-count" class="text-xs font-medium text-slate-400">0 movimientos</span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="data-table">
+        <thead><tr><th>Producto</th><th>Tipo</th><th class="text-right">Cantidad</th><th>Usuario</th><th class="text-right">Fecha</th></tr></thead>
+        <tbody id="movements-table"></tbody>
+      </table>
+    </div>
+  </article>
+</section>
