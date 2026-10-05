@@ -18,7 +18,27 @@ preferencia de modo oscuro se conserva en el navegador.
 La vista **Clientes** permite buscar, crear, editar y eliminar clientes. La
 eliminación se bloquea cuando hay pedidos, pagos o ventas asociados para
 proteger el historial.
-En **Historial de ventas** también se puede editar una transacción: cliente,
+En **Productos** se pueden crear tallas reutilizables y asignarlas a cada
+producto. Cada variante mantiene existencias, stock mínimo, SKU y código de
+barras propios; las ventas, los escaneos y los movimientos descuentan o ajustan
+la talla elegida. La migración inicial conserva los artículos anteriores como
+variantes de talla **Única**.
+Los productos pueden configurarse para venderse también por caja. El inventario
+siempre se cuenta en unidades físicas: vender una caja descuenta las unidades
+configuradas en ella y aplica el precio especial de caja. En el punto de venta,
+la cantidad se puede ingresar numéricamente.
+El método **Crédito** entrega los productos al confirmar la venta y registra el
+saldo pendiente del cliente; antes de confirmar se puede registrar un abono
+inicial. Desde **Clientes**, la cuenta muestra las ventas a crédito y el
+historial de abonos, y permite registrar pagos posteriores, aplicados primero
+a la deuda más antigua. Las ventas a crédito no se pueden editar para proteger
+el historial de la deuda. La lista muestra por defecto solo cuentas con saldo
+pendiente; el buscador encuentra cualquier cliente.
+Los cambios de inventario se notifican por Socket.IO para que las sesiones
+abiertas vuelvan a cargar existencias, ventas, clientes, deudas e historial sin
+recargar la página. Al volver a una pestaña que estaba en segundo plano, también
+se sincronizan los datos.
+En **Historial de ventas** se pueden editar ventas no crediticias: cliente,
 método de pago y productos/cantidades. El servidor recalcula el total y ajusta
 el stock dentro de una transacción, registrando movimientos de corrección.
 
@@ -26,8 +46,9 @@ el stock dentro de una transacción, registrando movimientos de corrección.
 
 Configura en `backend/.env` `JWT_SECRET`, `TURSO_AUTH_TOKEN` y una URL de Turso
 en `TURSO_DATABASE_URL` o `TURSO_CONNECTION_URL`. Aplica todas las migraciones
-pendientes, incluidas las de inventario y categorías, a la misma base de datos
-configurada para el backend antes de iniciar la aplicación:
+pendientes, incluidas las de inventario, categorías, tallas, presentaciones por
+caja y cuentas a crédito, a la misma base de datos configurada para el backend
+antes de iniciar la aplicación:
 
 ```sh
 pnpm --dir backend exec drizzle-kit migrate

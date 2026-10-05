@@ -1,5 +1,6 @@
 import JsBarcode from "jsbarcode";
 import { jsPDF } from "jspdf";
+import { io, type Socket } from "socket.io-client";
 import {
   clearInventoryToken,
   getInventoryToken,
@@ -16,15 +17,30 @@ interface Product {
   categoryId: number;
   category: string;
   price: number;
+  unitsPerBox: number | null;
+  boxPrice: number | null;
   stock: number;
   minStock: number;
+  variants: ProductVariant[];
   tone: string;
   initials: string;
+}
+
+interface ProductVariant {
+  id: number;
+  tallaId: number;
+  size: string;
+  sku: string;
+  barcode: string;
+  stock: number;
+  minStock: number;
 }
 
 interface Movement {
   id: number;
   productId: number;
+  variantId: number;
+  size: string;
   type: "Ingreso" | "Salida" | "Venta";
   quantity: number;
   date: Date;
@@ -34,7 +50,11 @@ interface Movement {
 
 interface SaleLine {
   productId: number;
+  variantId: number;
+  size: string;
   name: string;
+  presentation: "UNIDAD" | "CAJA";
+  unitsPerPresentation: number;
   quantity: number;
   price: number;
 }
@@ -48,6 +68,9 @@ interface Sale {
   items: SaleLine[];
   payment: string;
   total: number;
+  paid?: number;
+  debt?: number;
+  paymentMethodInitial?: string;
 }
 
 interface Customer {
@@ -56,6 +79,7 @@ interface Customer {
   phone: string;
   cedula?: string | null;
   direccion?: string | null;
+  saldoDeuda: number;
 }
 
 interface ManagedInventoryUser extends InventoryUser {
@@ -67,15 +91,29 @@ const customers: Customer[] = [];
 const movements: Movement[] = [];
 const sales: Sale[] = [];
 const categories: Array<{ id: number; nombre: string }> = [];
+const tallas: Array<{ id: number; nombre: string; orden: number }> = [];
 const inventoryUsers: ManagedInventoryUser[] = [];
 
-const cart = new Map<number, number>();
+const cart = new Map<string, number>();
 const deletedProductSnapshots = new Map<number, Product>();
 const editedProductSnapshots = new Map<number, Product>();
 let activeCategory = "Todas";
 let toastTimeout = 0;
 let currentUser: InventoryUser | null = null;
 let editingSaleId: string | null = null;
+let realtimeSocket: Socket | null = null;
+let realtimeRefreshTimeout = 0;
+let realtimeRefreshInProgress = false;
+let realtimeRefreshPending = false;
+let openCustomerAccountId: number | null = null;
+let pendingProductDeleteId: number | null = null;
+const apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
+byId<HTMLDialogElement>("customer-account-modal")?.addEventListener(
+  "close",
+  () => {
+    openCustomerAccountId = null;
+  },
+);
 const currency = new Intl.NumberFormat("es-EC", {
   style: "currency",
   currency: "USD",
@@ -114,6 +152,44 @@ function productFor(id: number): Product | undefined {
     products.find((product) => product.id === id) ??
     editedProductSnapshots.get(id)
   );
+}
+
+function variantFor(
+  id: number,
+): { product: Product; variant: ProductVariant } | undefined {
+  for (const product of [...products, ...editedProductSnapshots.values()]) {
+    const variant = product.variants.find((item) => item.id === id);
+    if (variant) return { product, variant };
+  }
+}
+
+function cartKey(variantId: number, presentation: "UNIDAD" | "CAJA"): string {
+  return `${variantId}:${presentation}`;
+}
+
+function parseCartKey(key: string): {
+  variantId: number;
+  presentation: "UNIDAD" | "CAJA";
+} {
+  const [rawVariantId, rawPresentation] = key.split(":");
+  return {
+    variantId: Number(rawVariantId),
+    presentation: rawPresentation === "CAJA" ? "CAJA" : "UNIDAD",
+  };
+}
+
+function presentationUnits(
+  product: Product,
+  presentation: "UNIDAD" | "CAJA",
+): number {
+  return presentation === "CAJA" ? (product.unitsPerBox ?? 0) : 1;
+}
+
+function presentationPrice(
+  product: Product,
+  presentation: "UNIDAD" | "CAJA",
+): number {
+  return presentation === "CAJA" ? (product.boxPrice ?? 0) : product.price;
 }
 
 function normalizedProduct(
@@ -155,6 +231,7 @@ function notify(message: string): void {
 
 function setAuthenticatedView(user: InventoryUser): void {
   currentUser = user;
+  connectRealtimeUpdates();
   const login = byId<HTMLElement>("login-screen");
   const dashboard = byId<HTMLElement>("dashboard-app");
   if (login) login.hidden = true;
@@ -206,6 +283,8 @@ setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
 function showLogin(message = ""): void {
   currentUser = null;
+  realtimeSocket?.disconnect();
+  realtimeSocket = null;
   const login = byId<HTMLElement>("login-screen");
   const dashboard = byId<HTMLElement>("dashboard-app");
   if (dashboard) dashboard.hidden = true;
@@ -221,6 +300,13 @@ window.addEventListener("inventario:unauthorized", () => {
   showLogin("La sesión expiró. Inicia sesión de nuevo.");
 });
 
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && realtimeRefreshPending) {
+    realtimeRefreshPending = false;
+    refreshForRealtimeChange();
+  }
+});
+
 async function loadDashboardData(): Promise<void> {
   if (!currentUser) return;
   const productPath =
@@ -231,6 +317,7 @@ async function loadDashboardData(): Promise<void> {
     ventasApi,
     movimientosApi,
     categoriasApi,
+    tallasApi,
     usuariosApi,
   ] = await Promise.all([
     inventoryRequest<
@@ -240,6 +327,7 @@ async function loadDashboardData(): Promise<void> {
         telefono: string;
         cedula?: string | null;
         direccion?: string | null;
+        saldoDeuda: number;
       }>
     >("/clientes"),
     inventoryRequest<Array<Omit<Product, "tone" | "initials">>>(productPath),
@@ -257,6 +345,13 @@ async function loadDashboardData(): Promise<void> {
       ? inventoryRequest<Array<{ id: number; nombre: string }>>("/categorias")
       : Promise.resolve([] as Array<{ id: number; nombre: string }>),
     currentUser.rol === "ADMIN"
+      ? inventoryRequest<Array<{ id: number; nombre: string; orden: number }>>(
+          "/tallas",
+        )
+      : Promise.resolve(
+          [] as Array<{ id: number; nombre: string; orden: number }>,
+        ),
+    currentUser.rol === "ADMIN"
       ? inventoryRequest<ManagedInventoryUser[]>("/usuarios")
       : Promise.resolve([] as ManagedInventoryUser[]),
   ]);
@@ -270,6 +365,7 @@ async function loadDashboardData(): Promise<void> {
       phone: cliente.telefono,
       cedula: cliente.cedula,
       direccion: cliente.direccion,
+      saldoDeuda: cliente.saldoDeuda,
     })),
   );
   products.splice(0, products.length, ...productosApi.map(normalizedProduct));
@@ -290,8 +386,11 @@ async function loadDashboardData(): Promise<void> {
     })),
   );
   categories.splice(0, categories.length, ...categoriasApi);
+  tallas.splice(0, tallas.length, ...tallasApi);
   inventoryUsers.splice(0, inventoryUsers.length, ...usuariosApi);
   renderCategoryOptions();
+  renderProductVariantFields();
+  renderTallas();
   renderCategories();
   refreshViews();
   renderCustomers();
@@ -351,8 +450,8 @@ function movementBadge(type: Movement["type"]): string {
 function renderSummary(): void {
   const today = new Date().toDateString();
   const todaySales = sales.filter((sale) => sale.date.toDateString() === today);
-  const lowStock = products.filter(
-    (product) => product.stock <= product.minStock,
+  const lowStock = products.filter((product) =>
+    product.variants.some((variant) => variant.stock <= variant.minStock),
   );
   const setText = (id: string, text: string) => {
     const node = byId(id);
@@ -384,7 +483,7 @@ function renderSummary(): void {
               product,
             ) => `<div class="flex items-center gap-3 rounded-xl px-1 py-3">
           <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold">${escapeHtml(product.initials)}</div>
-          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Mínimo ${product.minStock} unidades</p></div>
+          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Revisar: ${product.variants.filter((variant) => variant.stock <= variant.minStock).map((variant) => `${escapeHtml(variant.size)} (mín. ${variant.minStock})`).join(", ")}</p></div>
           <span class="rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700">${product.stock} uds.</span>
         </div>`,
           )
@@ -412,7 +511,7 @@ function renderMovements(): void {
               .toUpperCase(),
           };
         return `<tr>
-      <td><div class="flex items-center gap-3"><span class="hidden h-8 w-8 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold sm:flex">${escapeHtml(product.initials)}</span><span class="font-semibold text-slate-700">${escapeHtml(product.name)}</span></div></td>
+      <td><div class="flex items-center gap-3"><span class="hidden h-8 w-8 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold sm:flex">${escapeHtml(product.initials)}</span><span class="font-semibold text-slate-700">${escapeHtml(product.name)} · ${escapeHtml(movement.size)}</span></div></td>
       <td>${movementBadge(movement.type)}</td>
       <td class="text-right font-semibold ${movement.type === "Ingreso" ? "text-emerald-700" : "text-slate-600"}">${movement.type === "Ingreso" ? "+" : "−"}${movement.quantity}</td>
       ${
@@ -453,6 +552,46 @@ function renderCategoryOptions(selectedId?: number): void {
     select.value = String(categories[0].id);
   }
   select.disabled = categories.length === 0;
+}
+
+function renderTallas(): void {
+  const list = byId("tallas-list");
+  if (!list) return;
+  list.innerHTML = tallas
+    .map(
+      (talla) =>
+        `<li class="rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">${escapeHtml(talla.nombre)}</li>`,
+    )
+    .join("");
+}
+
+function renderProductVariantFields(
+  selectedVariants: ProductVariant[] = [],
+  selectUniqueByDefault = true,
+): void {
+  const container = byId("product-variants");
+  if (!container) return;
+  container.innerHTML = tallas
+    .map((talla) => {
+      const existing = selectedVariants.find(
+        (variant) => variant.tallaId === talla.id,
+      );
+      const selected =
+        Boolean(existing) || (selectUniqueByDefault && talla.nombre === "Única");
+      return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2">
+        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <input class="accent-[#287052]" type="checkbox" data-variant-size="${talla.id}" ${selected ? "checked" : ""} />
+          ${escapeHtml(talla.nombre)}
+        </label>
+        <label class="text-[10px] font-medium text-slate-500">Stock
+          <input id="variant-stock-${talla.id}" class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-stock="${talla.id}" value="${existing?.stock ?? 0}" ${selected ? "" : "disabled"} />
+        </label>
+        <label class="text-[10px] font-medium text-slate-500">Mínimo
+          <input id="variant-min-stock-${talla.id}" class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-min-stock="${talla.id}" value="${existing?.minStock ?? 5}" ${selected ? "" : "disabled"} />
+        </label>
+      </div>`;
+    })
+    .join("");
 }
 
 function renderCategories(): void {
@@ -520,11 +659,13 @@ function renderCustomersTable(): void {
     byId<HTMLInputElement>("customer-crud-search")
       ?.value.trim()
       .toLocaleLowerCase("es") ?? "";
-  const filtered = customers.filter((customer) =>
-    `${customer.name} ${customer.phone} ${customer.cedula ?? ""} ${customer.direccion ?? ""}`
-      .toLocaleLowerCase("es")
-      .includes(query),
-  );
+  const filtered = customers.filter((customer) => {
+    const matchesQuery =
+      `${customer.name} ${customer.phone} ${customer.cedula ?? ""} ${customer.direccion ?? ""}`
+        .toLocaleLowerCase("es")
+        .includes(query);
+    return matchesQuery && (query.length > 0 || customer.saldoDeuda > 0);
+  });
   const table = byId("customers-table");
   if (table) {
     table.innerHTML =
@@ -535,22 +676,209 @@ function renderCustomersTable(): void {
           <td>${escapeHtml(customer.phone)}</td>
           <td class="text-slate-500">${escapeHtml(customer.cedula || "—")}</td>
           <td class="max-w-xs truncate text-slate-500" title="${escapeHtml(customer.direccion || "")}">${escapeHtml(customer.direccion || "—")}</td>
+          <td class="font-semibold ${customer.saldoDeuda > 0 ? "text-rose-700" : "text-slate-400"}">${currency.format(customer.saldoDeuda)}</td>
           <td class="text-right">
-            <div class="flex justify-end gap-2">
-              <button type="button" class="text-xs font-semibold text-[#287052] hover:underline" data-customer-edit="${customer.id}">Editar</button>
+           <div class="flex justify-end gap-2">
+             <button type="button" class="text-xs font-semibold ${customer.saldoDeuda > 0 ? "text-rose-700" : "text-[#287052]"} hover:underline" data-customer-account="${customer.id}">Cuenta</button>
+             <button type="button" class="text-xs font-semibold text-[#287052] hover:underline" data-customer-edit="${customer.id}">Editar</button>
               <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-customer-delete="${customer.id}">Eliminar</button>
             </div>
           </td>
         </tr>`,
         )
-        .join("") || emptyRow("No se encontraron clientes.", 5);
+        .join("");
   }
-  byId("customers-crud-empty")?.classList.toggle("hidden", filtered.length > 0);
+  const empty = byId("customers-crud-empty");
+  if (empty) {
+    empty.textContent = query
+      ? "No se encontraron clientes con esa búsqueda."
+      : "No hay clientes con deudas pendientes.";
+    empty.classList.toggle("hidden", filtered.length > 0);
+  }
   const count = byId("customer-crud-count");
   if (count) {
-    count.textContent = `${filtered.length} de ${customers.length} ${
-      customers.length === 1 ? "cliente" : "clientes"
-    }`;
+    count.textContent = query
+      ? `${filtered.length} resultado(s) · búsqueda en ${customers.length} clientes`
+      : `${filtered.length} cliente(s) con deuda`;
+  }
+}
+
+function refreshForRealtimeChange(): void {
+  if (!currentUser) return;
+  if (document.hidden) {
+    realtimeRefreshPending = true;
+    return;
+  }
+  if (realtimeRefreshInProgress) {
+    realtimeRefreshPending = true;
+    return;
+  }
+  realtimeRefreshInProgress = true;
+  void loadDashboardData()
+    .then(async () => {
+      const accountId = openCustomerAccountId;
+      if (
+        accountId !== null &&
+        byId<HTMLDialogElement>("customer-account-modal")?.open
+      ) {
+        await openCustomerAccount(accountId, true);
+      }
+    })
+    .catch((cause: unknown) => {
+      console.error("No se pudo sincronizar el inventario en tiempo real:", cause);
+    })
+    .finally(() => {
+      realtimeRefreshInProgress = false;
+      if (realtimeRefreshPending) {
+        realtimeRefreshPending = false;
+        refreshForRealtimeChange();
+      }
+    });
+}
+
+function connectRealtimeUpdates(): void {
+  if (realtimeSocket) return;
+  realtimeSocket = io(`${apiUrl}/pedidos`, { transports: ["websocket"] });
+  const scheduleRefresh = () => {
+    window.clearTimeout(realtimeRefreshTimeout);
+    realtimeRefreshTimeout = window.setTimeout(refreshForRealtimeChange, 150);
+  };
+  realtimeSocket.on("connect", scheduleRefresh);
+  realtimeSocket.on("inventarioActualizado", scheduleRefresh);
+  realtimeSocket.on("finanzasActualizadas", scheduleRefresh);
+  realtimeSocket.on("pedidoActualizado", scheduleRefresh);
+  realtimeSocket.on("connect_error", (cause: Error) => {
+    console.error("No se pudo conectar a las actualizaciones en tiempo real:", cause.message);
+  });
+}
+
+async function openCustomerAccount(
+  customerId: number,
+  onlyIfAlreadyOpen = false,
+): Promise<void> {
+  const dialog = byId<HTMLDialogElement>("customer-account-modal");
+  const content = byId("customer-account-content");
+  if (!dialog || !content) return;
+  if (onlyIfAlreadyOpen) {
+    if (!dialog.open || openCustomerAccountId !== customerId) return;
+  } else {
+    openCustomerAccountId = customerId;
+  }
+  try {
+    const account = await inventoryRequest<{
+      cliente: { id: number; nombre: string; telefono: string };
+      saldoDeuda: number;
+      ventas: Array<{
+        id: string;
+        fecha: string | Date;
+        total: number;
+        pagado: number;
+        saldo: number;
+        items: Array<{
+          nombre: string;
+          talla: string;
+          presentacion: string;
+          cantidad: number;
+          total: number;
+        }>;
+      }>;
+      abonos: Array<{
+        id: number;
+        venta: string;
+        monto: number;
+        metodoPago: string;
+        fecha: string | Date;
+        usuario: string;
+      }>;
+    }>(`/clientes/${customerId}/cuenta`);
+    if (
+      onlyIfAlreadyOpen &&
+      (!dialog.open || openCustomerAccountId !== customerId)
+    ) {
+      return;
+    }
+    content.innerHTML = `
+      <div class="modal-heading">
+        <div><h2 class="text-lg font-bold">Cuenta de ${escapeHtml(account.cliente.nombre)}</h2><p class="mt-1 text-xs text-slate-500">${escapeHtml(account.cliente.telefono)}</p></div>
+        <button type="button" class="modal-close" data-close="customer-account-modal" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="max-h-[70vh] space-y-5 overflow-y-auto p-5">
+        <div class="rounded-xl ${account.saldoDeuda > 0 ? "bg-rose-50" : "bg-emerald-50"} p-4">
+          <p class="text-xs font-semibold text-slate-500">Saldo pendiente</p>
+          <p class="mt-1 text-2xl font-bold ${account.saldoDeuda > 0 ? "text-rose-700" : "text-emerald-700"}">${currency.format(account.saldoDeuda)}</p>
+        </div>
+        <section>
+          <h3 class="mb-2 text-sm font-bold text-slate-700">Ventas a crédito</h3>
+          <div class="space-y-2">
+            ${account.ventas.map((venta) => `<article class="rounded-xl border border-[#edf0ec] p-3">
+              <div class="flex items-start justify-between gap-3">
+                <div><p class="text-xs font-bold text-slate-700">${escapeHtml(venta.id)} · ${dateTime.format(new Date(venta.fecha))}</p>
+                  <p class="mt-1 text-[11px] text-slate-500">${venta.items.map((item) => `${escapeHtml(item.nombre)} ${escapeHtml(item.talla)} × ${item.cantidad} ${item.presentacion === "CAJA" ? "(caja)" : ""}`).join(", ")}</p>
+                </div>
+                <div class="shrink-0 text-right text-xs">
+                  <p>Total ${currency.format(venta.total)}</p><p class="text-emerald-700">Abonado ${currency.format(venta.pagado)}</p>
+                  <p class="font-bold ${venta.saldo > 0 ? "text-rose-700" : "text-slate-500"}">Debe ${currency.format(venta.saldo)}</p>
+                </div>
+              </div>
+            </article>`).join("") || '<p class="text-xs text-slate-400">No hay ventas a crédito registradas.</p>'}
+          </div>
+        </section>
+        <section>
+          <h3 class="mb-2 text-sm font-bold text-slate-700">Historial de abonos</h3>
+          <div class="overflow-x-auto rounded-xl border border-[#edf0ec]">
+            <table class="data-table"><thead><tr><th>Fecha</th><th>Venta</th><th>Método</th><th>Usuario</th><th class="text-right">Monto</th></tr></thead>
+            <tbody>${account.abonos.map((abono) => `<tr><td>${dateTime.format(new Date(abono.fecha))}</td><td>${escapeHtml(abono.venta)}</td><td>${escapeHtml(abono.metodoPago)}</td><td>${escapeHtml(abono.usuario)}</td><td class="text-right font-semibold">${currency.format(abono.monto)}</td></tr>`).join("") || '<tr><td colspan="5" class="py-5 text-center text-xs text-slate-400">Sin abonos todavía.</td></tr>'}</tbody>
+            </table>
+          </div>
+        </section>
+        ${account.saldoDeuda > 0 ? `<form id="customer-account-payment-form" class="grid gap-3 rounded-xl bg-[#f7f9f6] p-4 sm:grid-cols-[1fr_1fr_auto]">
+          <label class="form-label">Nuevo abono ($)<input class="form-input mt-1" name="amount" type="number" min="0.01" max="${account.saldoDeuda.toFixed(2)}" step="0.01" required /></label>
+          <label class="form-label">Método<select class="form-input mt-1" name="method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></label>
+          <button type="submit" class="primary-button self-end">Registrar abono</button>
+        </form>` : ""}
+      </div>
+      <div class="flex justify-end border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="customer-account-modal">Cerrar</button></div>`;
+    if (!dialog.open) dialog.showModal();
+    byId("customer-account-payment-form")?.addEventListener(
+      "submit",
+      async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget as HTMLFormElement;
+        const data = new FormData(form);
+        const monto = Number(data.get("amount"));
+        if (!Number.isFinite(monto) || monto <= 0) {
+          notify("Ingresa un monto de abono válido.");
+          return;
+        }
+        try {
+          const result = await inventoryRequest<{ monto: number }>(
+            `/clientes/${customerId}/abonos`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                monto,
+                metodoPago: String(data.get("method")),
+              }),
+            },
+          );
+          await loadDashboardData();
+          await openCustomerAccount(customerId);
+          notify(`Abono de ${currency.format(result.monto)} registrado.`);
+        } catch (cause) {
+          notify(
+            cause instanceof Error
+              ? cause.message
+              : "No se pudo registrar el abono.",
+          );
+        }
+      },
+    );
+  } catch (cause) {
+    notify(
+      cause instanceof Error
+        ? cause.message
+        : "No se pudo cargar la cuenta del cliente.",
+    );
   }
 }
 
@@ -560,7 +888,9 @@ function renderProducts(): void {
   const category = byId<HTMLSelectElement>("category-filter")?.value ?? "";
   const filtered = [...products, ...editedProductSnapshots.values()].filter(
     (product) =>
-      `${product.name} ${product.sku} ${product.barcode}`
+      `${product.name} ${product.sku} ${product.barcode} ${product.variants
+        .map((variant) => `${variant.size} ${variant.sku} ${variant.barcode}`)
+        .join(" ")}`
         .toLowerCase()
         .includes(search) &&
       (!category || product.category === category),
@@ -571,19 +901,28 @@ function renderProducts(): void {
     table.innerHTML =
       filtered
         .map((product) => {
-          const low = product.stock <= product.minStock;
+          const low = product.variants.some(
+            (variant) => variant.stock <= variant.minStock,
+          );
           const out = product.stock === 0;
           return `<tr>
       <td><div class="flex items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold">${escapeHtml(product.initials)}</span><span class="font-semibold text-slate-700">${escapeHtml(product.name)}</span></div></td>
       <td class="font-mono text-xs text-slate-400">${escapeHtml(product.sku)}</td>
-      <td><button class="text-left font-mono text-[10px] text-[#287052] hover:underline" data-product-barcode="${product.id}" title="Ver código de barras">${escapeHtml(product.barcode)}</button></td>
+      <td><div class="flex flex-wrap gap-1">${product.variants
+        .map(
+          (variant) => `<span class="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[10px]">
+            <span class="font-semibold text-slate-600">${escapeHtml(variant.size)} · ${variant.stock}</span>
+            <button class="font-mono text-[#287052] hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variant.size)}">${escapeHtml(variant.barcode)}</button>
+            <button class="font-bold text-[#287052]" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variant.size)}">＋</button>
+          </span>`,
+        )
+        .join("")}</div></td>
       <td class="text-slate-500">${escapeHtml(product.category)}</td>
       <td class="font-semibold text-slate-700">${currency.format(product.price)}</td>
       <td><span class="font-semibold ${low ? "text-rose-700" : "text-slate-700"}">${product.stock}</span><span class="ml-1 text-[10px] text-slate-400">uds.</span></td>
       <td><span class="rounded-full px-2.5 py-1 text-[10px] font-bold ${out ? "bg-slate-100 text-slate-500" : low ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}">${out ? "Agotado" : low ? "Stock bajo" : "Disponible"}</span></td>
       <td class="text-right">
         <div class="flex items-center justify-end gap-1">
-          <button class="rounded-lg px-2 py-1 text-xs font-semibold text-[#287052] hover:bg-emerald-50" data-add-stock="${product.id}">＋ Stock</button>
           <details class="product-options">
             <summary class="options-trigger" aria-label="Opciones de ${escapeHtml(product.name)}" title="Opciones del producto">⋯</summary>
             <div class="options-menu">
@@ -621,26 +960,30 @@ function renderPos(): void {
   const search =
     byId<HTMLInputElement>("pos-search")?.value.trim().toLowerCase() ?? "";
   const editedSale = sales.find((sale) => sale.id === editingSaleId);
-  const filtered = products.filter(
-    (product) =>
-      availableForSale(product, editedSale) > 0 &&
-      `${product.name} ${product.sku} ${product.barcode}`
-        .toLowerCase()
-        .includes(search) &&
-      (activeCategory === "Todas" || product.category === activeCategory),
+  const filtered = products.flatMap((product) =>
+    product.variants
+      .filter(
+        (variant) =>
+          availableForSale(variant, editedSale) > 0 &&
+          `${product.name} ${product.sku} ${product.barcode} ${variant.size} ${variant.sku} ${variant.barcode}`
+            .toLowerCase()
+            .includes(search) &&
+          (activeCategory === "Todas" || product.category === activeCategory),
+      )
+      .map((variant) => ({ product, variant })),
   );
   const container = byId("pos-products");
   if (container)
     container.innerHTML = filtered
       .map(
-        (product) => `
-    <button class="product-tile group text-left" data-cart-add="${product.id}">
+        ({ product, variant }) => `
+    <button class="product-tile group text-left" data-cart-add="${variant.id}">
       <div class="flex h-28 items-center justify-center rounded-xl ${product.tone} transition group-hover:brightness-[0.98]">
-        <span class="text-2xl font-black tracking-wide opacity-70">${escapeHtml(product.initials)}</span>
+        <span class="text-2xl font-black tracking-wide opacity-70">${escapeHtml(variant.size)}</span>
       </div>
       <div class="mt-3 flex items-start justify-between gap-2">
-        <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">${availableForSale(product, editedSale)} disponibles</p></div>
-        <span class="shrink-0 text-xs font-bold text-[#1e6047]">${currency.format(product.price)}</span>
+        <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Talla ${escapeHtml(variant.size)} · ${availableForSale(variant, editedSale)} disponibles</p></div>
+        <span class="shrink-0 text-right text-xs font-bold text-[#1e6047]">${currency.format(product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
       </div>
     </button>
   `,
@@ -665,35 +1008,60 @@ function renderPos(): void {
 
 function renderCart(): void {
   const entries = [...cart.entries()]
-    .map(([id, quantity]) => ({ product: productFor(id), quantity }))
-    .filter((entry) => entry.product);
+    .map(([key, quantity]) => {
+      const { variantId, presentation } = parseCartKey(key);
+      return {
+        key,
+        item: variantFor(variantId),
+        presentation,
+        quantity,
+      };
+    })
+    .filter(
+      (
+        entry,
+      ): entry is {
+        key: string;
+        item: { product: Product; variant: ProductVariant };
+        presentation: "UNIDAD" | "CAJA";
+        quantity: number;
+      } => Boolean(entry.item),
+    );
   const items = byId("cart-items");
   const itemCount = entries.reduce((total, entry) => total + entry.quantity, 0);
   const total = entries.reduce(
-    (sum, entry) => sum + entry.product!.price * entry.quantity,
+    (sum, entry) =>
+      sum +
+      presentationPrice(entry.item.product, entry.presentation) *
+        entry.quantity,
     0,
   );
   if (items)
     items.innerHTML = entries
       .map(
-        ({ product, quantity }) => `
+        ({ item, quantity, presentation, key }) => {
+          const unidades = presentationUnits(item.product, presentation);
+          const maximum = availableForCart(
+            item.variant,
+            unidades,
+            key,
+          );
+          const linePrice = presentationPrice(item.product, presentation);
+          return `
     <div class="flex items-center gap-3 py-4">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${product!.tone} text-[10px] font-bold">${escapeHtml(product!.initials)}</div>
-      <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product!.name)}</p><p class="mt-1 text-[10px] text-slate-400">${currency.format(product!.price)}</p></div>
-      <div class="flex items-center gap-1.5">
-        <button class="qty-button" data-cart-change="${product!.id}" data-delta="-1" aria-label="Quitar uno">−</button>
-        <span class="w-5 text-center text-xs font-semibold">${quantity}</span>
-        <button class="qty-button" data-cart-change="${product!.id}" data-delta="1" aria-label="Agregar uno" ${
-          quantity >=
-          availableForSale(
-            product!,
-            sales.find((sale) => sale.id === editingSaleId),
-          )
-            ? "disabled"
-            : ""
-        }>＋</button>
+      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.product.tone} text-[10px] font-bold">${escapeHtml(item.variant.size)}</div>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(item.product.name)} · ${escapeHtml(item.variant.size)}</p>
+        ${item.product.unitsPerBox && item.product.boxPrice ? `<select class="form-input mt-1 h-7 max-w-28 px-2 text-[10px]" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad · ${currency.format(item.product.price)}</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox}) · ${currency.format(item.product.boxPrice)}</option></select>` : `<p class="mt-1 text-[10px] text-slate-400">${currency.format(linePrice)} / unidad</p>`}
       </div>
-    </div>`,
+      <div class="flex items-center gap-1.5">
+        <button class="qty-button" data-cart-change="${key}" data-delta="-1" aria-label="Quitar uno">−</button>
+        <input class="form-input h-8 w-14 px-1 text-center text-xs" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" />
+        <button class="qty-button" data-cart-change="${key}" data-delta="1" aria-label="Agregar uno" ${quantity >= maximum ? "disabled" : ""}>＋</button>
+      </div>
+      <strong class="shrink-0 text-xs">${currency.format(linePrice * quantity)}</strong>
+    </div>`;
+        },
       )
       .join("");
   byId("cart-count")!.textContent = String(itemCount);
@@ -703,9 +1071,23 @@ function renderCart(): void {
   const hasCustomer = Boolean(
     byId<HTMLInputElement>("selected-customer-id")?.value,
   );
+  const isCredit =
+    byId<HTMLSelectElement>("payment-method")?.value === "Crédito";
+  byId("credit-initial-payment")?.classList.toggle("hidden", !isCredit);
+  const initialPaymentInput = byId<HTMLInputElement>("initial-payment-amount");
+  if (initialPaymentInput) {
+    initialPaymentInput.max = total.toFixed(2);
+  }
+  const initialPayment = Number(initialPaymentInput?.value ?? 0);
+  const initialPaymentValid =
+    !isCredit ||
+    (Number.isFinite(initialPayment) &&
+      initialPayment >= 0 &&
+      initialPayment <= total);
   const completeButton = byId<HTMLButtonElement>("complete-sale");
   if (completeButton) {
-    completeButton.disabled = entries.length === 0 || !hasCustomer;
+    completeButton.disabled =
+      entries.length === 0 || !hasCustomer || !initialPaymentValid;
     completeButton.textContent = editingSaleId
       ? "Guardar cambios de venta"
       : "Completar venta";
@@ -718,16 +1100,55 @@ function renderCart(): void {
         ? "Agrega productos para continuar."
         : editingSaleId
           ? "Las existencias se ajustarán al guardar los cambios."
-          : "El stock se actualizará al confirmar la venta.";
+          : isCredit
+            ? "Al confirmar se entregan los productos y se registra la deuda pendiente."
+            : "El stock se actualizará al confirmar la venta.";
   }
 }
 
-function availableForSale(product: Product, sale?: Sale): number {
+function availableForSale(
+  variant: ProductVariant,
+  sale?: Sale,
+  unitsPerPresentation = 1,
+): number {
   const returned =
     sale?.items
-      .filter((item) => item.productId === product.id)
-      .reduce((sum, item) => sum + item.quantity, 0) ?? 0;
-  return product.stock + returned;
+      .filter((item) => item.variantId === variant.id)
+      .reduce(
+        (sum, item) => sum + item.quantity * item.unitsPerPresentation,
+        0,
+      ) ?? 0;
+  return Math.floor((variant.stock + returned) / unitsPerPresentation);
+}
+
+function availableForCart(
+  variant: ProductVariant,
+  unitsPerPresentation: number,
+  excludedKey?: string | string[],
+): number {
+  const product = variantFor(variant.id)?.product;
+  if (!product || unitsPerPresentation < 1) return 0;
+  const excludedKeys = new Set(
+    Array.isArray(excludedKey) ? excludedKey : excludedKey ? [excludedKey] : [],
+  );
+  let remaining =
+    variant.stock +
+    (sales
+      .find((sale) => sale.id === editingSaleId)
+      ?.items.filter((item) => item.variantId === variant.id)
+      .reduce(
+        (sum, item) => sum + item.quantity * item.unitsPerPresentation,
+        0,
+      ) ?? 0);
+  for (const [key, quantity] of cart) {
+    if (excludedKeys.has(key)) continue;
+    const parsed = parseCartKey(key);
+    if (parsed.variantId !== variant.id) continue;
+    remaining -=
+      quantity *
+      presentationUnits(product, parsed.presentation);
+  }
+  return Math.max(0, Math.floor(remaining / unitsPerPresentation));
 }
 
 function salesInDateRange(
@@ -770,7 +1191,7 @@ function renderSales(): void {
             sale.id,
             sale.customerName,
             sale.customerPhone ?? "",
-            ...sale.items.map((item) => item.name),
+            ...sale.items.map((item) => `${item.name} ${item.size}`),
           ].some((value) => value.toLocaleLowerCase("es").includes(search))),
     )
     .sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -810,7 +1231,7 @@ function renderSales(): void {
       <td class="text-right font-bold text-slate-700">${currency.format(sale.total)}</td>
       <td>
         <div class="flex items-center justify-end gap-1">
-          <button class="sale-action" data-sale-edit="${escapeHtml(sale.id)}">Editar</button>
+        ${sale.payment === "Crédito" ? '<button class="sale-action cursor-not-allowed opacity-45" type="button" disabled title="Las ventas a crédito no se pueden editar">No editable</button>' : `<button class="sale-action" data-sale-edit="${escapeHtml(sale.id)}">Editar</button>`}
           <button class="sale-action" data-sale-print="${escapeHtml(sale.id)}">Imprimir</button>
         </div>
       </td>
@@ -867,14 +1288,15 @@ function renderSalesStats(): void {
     paymentMap.set(sale.payment, payment);
 
     for (const item of sale.items) {
-      const product = productMap.get(item.name) ?? {
-        name: item.name,
+      const productName = `${item.name} · ${item.size}`;
+      const product = productMap.get(productName) ?? {
+        name: productName,
         quantity: 0,
         total: 0,
       };
       product.quantity += item.quantity;
       product.total += item.quantity * item.price;
-      productMap.set(item.name, product);
+      productMap.set(productName, product);
     }
   }
 
@@ -959,7 +1381,7 @@ function exportSalesCsv(): void {
             sale.id,
             sale.customerName,
             sale.customerPhone ?? "",
-            ...sale.items.map((item) => item.name),
+            ...sale.items.map((item) => `${item.name} ${item.size}`),
           ].some((value) => value.toLocaleLowerCase("es").includes(search))),
     )
     .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -984,7 +1406,9 @@ function exportSalesCsv(): void {
     sale.customerName,
     sale.customerPhone ?? "",
     sale.payment,
-    sale.items.map((item) => `${item.name} x${item.quantity}`).join(" | "),
+    sale.items
+      .map((item) => `${item.name} (${item.size}) x${item.quantity}`)
+      .join(" | "),
     sale.items.reduce((sum, item) => sum + item.quantity, 0),
     sale.total.toFixed(2),
   ]);
@@ -1021,7 +1445,7 @@ function receiptMarkup(sale: Sale): string {
         .map(
           (item) => `
         <div class="receipt-line">
-          <span>${escapeHtml(item.name)}<small>${currency.format(item.price)} c/u</small></span>
+          <span>${escapeHtml(item.name)} · ${escapeHtml(item.size)}<small>${currency.format(item.price)} c/u</small></span>
           <span>${item.quantity}</span>
           <strong>${currency.format(item.quantity * item.price)}</strong>
         </div>`,
@@ -1038,9 +1462,10 @@ function showSaleConfirmation(sale: Sale): void {
   if (!content || !dialog) return;
   const itemCount = sale.items.reduce((sum, item) => sum + item.quantity, 0);
   const editing = editingSaleId !== null;
+  const credit = sale.payment === "Crédito";
   content.innerHTML = `
     <div class="modal-heading">
-      <div><h2 class="text-lg font-bold">${editing ? `Guardar cambios de ${escapeHtml(editingSaleId!)}` : "Confirmar venta"}</h2><p class="mt-1 text-xs text-slate-500">${editing ? "Revisa los cambios antes de actualizar la venta." : "Revisa los detalles antes de confirmar el cobro."}</p></div>
+      <div><h2 class="text-lg font-bold">${editing ? `Guardar cambios de ${escapeHtml(editingSaleId!)}` : credit ? "Confirmar entrega a crédito" : "Confirmar venta"}</h2><p class="mt-1 text-xs text-slate-500">${editing ? "Revisa los cambios antes de actualizar la venta." : credit ? "Se entregan los productos ahora y el saldo se registra como deuda del cliente." : "Revisa los detalles antes de confirmar el cobro."}</p></div>
       <button type="button" class="modal-close" data-close="sale-confirm-modal" aria-label="Cerrar">✕</button>
     </div>
     <div class="space-y-4 p-5">
@@ -1051,15 +1476,18 @@ function showSaleConfirmation(sale: Sale): void {
       <div class="overflow-hidden rounded-xl border border-[#edf0ec]">
         <div class="flex items-center justify-between bg-[#fafbf9] px-4 py-3 text-[10px] font-bold uppercase tracking-wide text-slate-400"><span>Productos · ${itemCount} artículos</span><span>Importe</span></div>
         <div class="divide-y divide-[#edf0ec] px-4">
-          ${sale.items.map((item) => `<div class="flex items-center justify-between gap-4 py-3 text-sm"><span class="min-w-0"><span class="font-semibold text-slate-700">${escapeHtml(item.name)}</span><span class="ml-2 text-xs text-slate-400">× ${item.quantity}</span></span><span class="shrink-0 font-semibold text-slate-700">${currency.format(item.quantity * item.price)}</span></div>`).join("")}
+          ${sale.items.map((item) => `<div class="flex items-center justify-between gap-4 py-3 text-sm"><span class="min-w-0"><span class="font-semibold text-slate-700">${escapeHtml(item.name)} · ${escapeHtml(item.size)}</span><span class="ml-2 text-xs text-slate-400">× ${item.quantity} ${item.presentation === "CAJA" ? `caja(s) de ${item.unitsPerPresentation}` : "unidad(es)"}</span></span><span class="shrink-0 font-semibold text-slate-700">${currency.format(item.quantity * item.price)}</span></div>`).join("")}
         </div>
-        <div class="flex items-center justify-between border-t border-[#edf0ec] bg-[#fafbf9] px-4 py-4"><span class="text-sm font-bold text-slate-600">Total</span><strong class="text-lg font-bold text-[#1d5d43]">${currency.format(sale.total)}</strong></div>
+        <div class="space-y-2 border-t border-[#edf0ec] bg-[#fafbf9] px-4 py-4">
+          <div class="flex items-center justify-between"><span class="text-sm font-bold text-slate-600">Total</span><strong class="text-lg font-bold text-[#1d5d43]">${currency.format(sale.total)}</strong></div>
+          ${credit ? `<div class="flex items-center justify-between text-xs"><span>Abono al entregar · ${escapeHtml(String(sale.paymentMethodInitial ?? "Efectivo"))}</span><strong>${currency.format(sale.paid ?? 0)}</strong></div><div class="flex items-center justify-between text-sm font-bold text-rose-700"><span>Deuda pendiente</span><strong>${currency.format(sale.debt ?? sale.total)}</strong></div>` : ""}
+        </div>
       </div>
-      <p class="text-xs text-slate-400">${editing ? "Al guardar, se actualizarán la venta y las existencias." : "Al confirmar, se registrará la venta y se actualizarán las existencias."}</p>
+      <p class="text-xs ${credit ? "font-semibold text-amber-800" : "text-slate-400"}">${credit ? "Confirma para entregar los productos y registrar la deuda. Si cancelas, no se guardará ni se descontará el stock." : editing ? "Al guardar, se actualizarán la venta y las existencias." : "Al confirmar, se registrará la venta y se actualizarán las existencias."}</p>
     </div>
     <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4">
       <button type="button" class="secondary-button" data-close="sale-confirm-modal">Volver a la venta</button>
-      <button type="button" id="confirm-sale-button" class="primary-button">${editing ? "Guardar cambios" : "Confirmar venta"} · ${currency.format(sale.total)}</button>
+      <button type="button" id="confirm-sale-button" class="primary-button">${editing ? "Guardar cambios" : credit ? "Confirmar entrega y deuda" : "Confirmar venta"} · ${currency.format(sale.total)}</button>
     </div>`;
   byId("confirm-sale-button")?.addEventListener("click", () =>
     confirmSale(sale),
@@ -1147,7 +1575,10 @@ function downloadSaleReceipt(sale: Sale): void {
   pdf.setFontSize(10);
   pdf.setTextColor(52, 65, 57);
   for (const item of sale.items) {
-    const nameLines = pdf.splitTextToSize(item.name, contentWidth - 75);
+    const nameLines = pdf.splitTextToSize(
+      `${item.name} · ${item.size}`,
+      contentWidth - 75,
+    );
     const rowHeight = Math.max(nameLines.length * 5, 10);
     if (y + rowHeight + 35 > pdf.internal.pageSize.getHeight()) {
       pdf.addPage();
@@ -1219,17 +1650,19 @@ function openSaleReceipt(sale: Sale): void {
   showSaleReceipt(sale);
 }
 
-function openMovementFor(productId?: number): void {
+function openMovementFor(variantId?: number): void {
   const select = byId<HTMLSelectElement>("movement-product");
   const dialog = byId<HTMLDialogElement>("movement-modal");
   if (!select || !dialog) return;
   select.innerHTML = products
-    .map(
-      (product) =>
-        `<option value="${product.id}">${escapeHtml(product.name)} · ${product.stock} uds.</option>`,
+    .flatMap((product) =>
+      product.variants.map(
+        (variant) =>
+          `<option value="${variant.id}">${escapeHtml(product.name)} · ${escapeHtml(variant.size)} · ${variant.stock} uds.</option>`,
+      ),
     )
     .join("");
-  if (productId) select.value = String(productId);
+  if (variantId) select.value = String(variantId);
   dialog.showModal();
 }
 
@@ -1285,18 +1718,18 @@ function renderCustomerResults(query: string): void {
   search.setAttribute("aria-expanded", "true");
 }
 
-function showBarcode(product: Product): void {
+function showBarcode(product: Product, variant: ProductVariant): void {
   const content = byId("barcode-content");
   const dialog = byId<HTMLDialogElement>("barcode-modal");
   if (!content || !dialog) return;
   content.innerHTML = `
-    <div class="modal-heading"><div><h2 class="text-lg font-bold">Código de barras</h2><p class="mt-1 text-xs text-slate-500">${escapeHtml(product.name)} · ${escapeHtml(product.sku)}</p></div><button type="button" class="modal-close" data-close="barcode-modal" aria-label="Cerrar">✕</button></div>
-    <div class="barcode-preview"><svg id="barcode-svg" role="img" aria-label="Código de barras ${escapeHtml(product.barcode)}"></svg></div>
-    <p class="pb-5 text-center font-mono text-xs tracking-wider text-slate-500">${escapeHtml(product.barcode)}</p>
+    <div class="modal-heading"><div><h2 class="text-lg font-bold">Código de barras</h2><p class="mt-1 text-xs text-slate-500">${escapeHtml(product.name)} · Talla ${escapeHtml(variant.size)} · ${escapeHtml(variant.sku)}</p></div><button type="button" class="modal-close" data-close="barcode-modal" aria-label="Cerrar">✕</button></div>
+    <div class="barcode-preview"><svg id="barcode-svg" role="img" aria-label="Código de barras ${escapeHtml(variant.barcode)}"></svg></div>
+    <p class="pb-5 text-center font-mono text-xs tracking-wider text-slate-500">${escapeHtml(variant.barcode)}</p>
     <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="barcode-modal">Cerrar</button><button type="button" id="print-barcode" class="primary-button">Imprimir código</button></div>`;
   const svg = byId<SVGSVGElement>("barcode-svg");
   if (svg) {
-    JsBarcode(svg, product.barcode, {
+    JsBarcode(svg, variant.barcode, {
       format: "CODE128",
       displayValue: false,
       height: 70,
@@ -1318,10 +1751,11 @@ function openProductEditor(productId: number): void {
   data.set("productId", String(product.id));
   data.set("name", product.name);
   data.set("price", String(product.price));
-  data.set("stock", String(product.stock));
-  data.set("minStock", String(product.minStock));
+  data.set("unitsPerBox", product.unitsPerBox ? String(product.unitsPerBox) : "");
+  data.set("boxPrice", product.boxPrice ? String(product.boxPrice) : "");
   form.reset();
   renderCategoryOptions(product.categoryId);
+  renderProductVariantFields(product.variants, false);
   for (const [name, value] of data) {
     const field = form.elements.namedItem(name);
     if (field instanceof HTMLInputElement) field.value = String(value);
@@ -1338,6 +1772,7 @@ function openNewProductForm(): void {
   if (!form) return;
   form.reset();
   renderCategoryOptions();
+  renderProductVariantFields();
   const skuDisplay = byId<HTMLInputElement>("product-sku-display");
   if (skuDisplay) skuDisplay.value = "Se asignará al guardar";
   byId("product-modal-title")!.textContent = "Nuevo producto";
@@ -1345,35 +1780,38 @@ function openNewProductForm(): void {
   byId<HTMLDialogElement>("product-modal")?.showModal();
 }
 
-function addProductToCart(product: Product): void {
-  const quantity = cart.get(product.id) ?? 0;
-  if (
-    quantity >=
-    availableForSale(
-      product,
-      sales.find((sale) => sale.id === editingSaleId),
-    )
-  ) {
+function addProductToCart(variantId: number): void {
+  const item = variantFor(variantId);
+  if (!item) return;
+  const { product, variant } = item;
+  const key = cartKey(variant.id, "UNIDAD");
+  const quantity = cart.get(key) ?? 0;
+  if (quantity >= availableForCart(variant, 1, key)) {
     notify("No hay existencias suficientes para agregar otra unidad.");
     return;
   }
-  cart.set(product.id, quantity + 1);
+  cart.set(key, quantity + 1);
   renderCart();
 }
 
 function scanBarcode(value: string): void {
   const code = value.trim().toUpperCase();
   if (!code) return;
-  const product = products.find(
-    (item) =>
-      item.barcode.toUpperCase() === code || item.sku.toUpperCase() === code,
-  );
-  if (!product) {
+  const item = products
+    .flatMap((product) =>
+      product.variants.map((variant) => ({ product, variant })),
+    )
+    .find(
+      ({ variant }) =>
+        variant.barcode.toUpperCase() === code ||
+        variant.sku.toUpperCase() === code,
+    );
+  if (!item) {
     notify(`No encontramos un producto con el código ${code}.`);
-  } else if (product.stock < 1) {
-    notify(`${product.name} no tiene existencias.`);
+  } else if (item.variant.stock < 1) {
+    notify(`${item.product.name} talla ${item.variant.size} no tiene existencias.`);
   } else {
-    addProductToCart(product);
+    addProductToCart(item.variant.id);
     byId<HTMLInputElement>("barcode-input")?.focus();
   }
 }
@@ -1439,6 +1877,10 @@ byId("close-sidebar")?.addEventListener("click", closeSidebar);
 byId("sidebar-scrim")?.addEventListener("click", closeSidebar);
 
 byId("open-product-modal")?.addEventListener("click", openNewProductForm);
+byId("open-tallas-modal")?.addEventListener("click", () => {
+  renderTallas();
+  byId<HTMLDialogElement>("tallas-modal")?.showModal();
+});
 byId("open-movement-modal")?.addEventListener("click", () => openMovementFor());
 function openCustomerForm(customer?: Customer): void {
   const form = byId<HTMLFormElement>("customer-form");
@@ -1582,18 +2024,51 @@ byId("product-form")?.addEventListener("submit", async (event) => {
   const productId = Number(data.get("productId")) || null;
   const name = String(data.get("name") ?? "").trim();
   const categoryId = Number(data.get("categoryId"));
-  const stock = Number(data.get("stock"));
+  const variantInputs = [
+    ...(byId("product-variants")?.querySelectorAll<HTMLInputElement>(
+      "[data-variant-size]:checked",
+    ) ?? []),
+  ];
+  const variants = variantInputs.map((checkbox) => {
+    const tallaId = Number(checkbox.dataset.variantSize);
+    const stock = Number(
+      byId<HTMLInputElement>(`variant-stock-${tallaId}`)?.value,
+    );
+    return {
+      tallaId,
+      existencia: stock,
+      stockMinimo: Number(
+        byId<HTMLInputElement>(`variant-min-stock-${tallaId}`)?.value,
+      ),
+    };
+  });
   const previous = productId ? productFor(productId) : undefined;
   if (productId && !previous) {
     notify("No encontramos el producto que intentas editar.");
+    return;
+  }
+  if (!variants.length || variants.some((variant) =>
+    !Number.isInteger(variant.existencia) ||
+    variant.existencia < 0 ||
+    !Number.isInteger(variant.stockMinimo) ||
+    variant.stockMinimo < 0
+  )) {
+    notify("Selecciona al menos una talla e ingresa stocks válidos.");
     return;
   }
   const payload = {
     nombre: name,
     categoriaId: categoryId,
     precio: Number(data.get("price")),
-    existencia: stock,
-    stockMinimo: Number(data.get("minStock")),
+    unidadesPorCaja:
+      String(data.get("unitsPerBox") ?? "").trim() === ""
+        ? null
+        : Number(data.get("unitsPerBox")),
+    precioCaja:
+      String(data.get("boxPrice") ?? "").trim() === ""
+        ? null
+        : Number(data.get("boxPrice")),
+    variantes: variants,
   };
   try {
     const saved = previous
@@ -1615,11 +2090,13 @@ byId("product-form")?.addEventListener("submit", async (event) => {
     form.reset();
     byId<HTMLDialogElement>("product-modal")?.close();
     await loadDashboardData();
-    if (!previous) showBarcode(updated);
+    if (!previous && updated.variants[0]) {
+      showBarcode(updated, updated.variants[0]);
+    }
     notify(
       previous
         ? "Producto actualizado."
-        : `Producto agregado. Código ${updated.barcode} generado.`,
+        : `Producto agregado con ${updated.variants.length} talla(s) y códigos generados.`,
     );
   } catch (cause) {
     notify(
@@ -1676,19 +2153,19 @@ byId("movement-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;
   const data = new FormData(form);
-  const productId = Number(data.get("productId"));
+  const variantId = Number(data.get("variantId"));
   const quantity = Number(data.get("quantity"));
   const type = String(data.get("type")) as "Ingreso" | "Salida";
-  const product = productFor(productId);
-  if (!product || !Number.isInteger(quantity) || quantity < 1) {
-    notify("Selecciona un producto y una cantidad válida.");
+  const item = variantFor(variantId);
+  if (!item || !Number.isInteger(quantity) || quantity < 1) {
+    notify("Selecciona un producto con talla y una cantidad válida.");
     return;
   }
   try {
     await inventoryRequest("/movimientos", {
       method: "POST",
       body: JSON.stringify({
-        productoId: productId,
+        varianteId: variantId,
         tipo: type,
         cantidad: quantity,
       }),
@@ -1706,9 +2183,42 @@ byId("movement-form")?.addEventListener("submit", async (event) => {
   }
 });
 
+byId("product-variants")?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || !target.matches("[data-variant-size]")) {
+    return;
+  }
+  const tallaId = Number(target.dataset.variantSize);
+  const enabled = target.checked;
+  const stock = byId<HTMLInputElement>(`variant-stock-${tallaId}`);
+  const minStock = byId<HTMLInputElement>(`variant-min-stock-${tallaId}`);
+  if (stock) stock.disabled = !enabled;
+  if (minStock) minStock.disabled = !enabled;
+});
+
+byId("talla-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const nombre = String(new FormData(form).get("name") ?? "").trim();
+  if (!nombre) return;
+  try {
+    await inventoryRequest("/tallas", {
+      method: "POST",
+      body: JSON.stringify({ nombre }),
+    });
+    form.reset();
+    await loadDashboardData();
+    notify(`Talla ${nombre} agregada.`);
+  } catch (cause) {
+    notify(cause instanceof Error ? cause.message : "No se pudo crear la talla.");
+  }
+});
+
 byId("product-search")?.addEventListener("input", renderProducts);
 byId("category-filter")?.addEventListener("change", renderProducts);
 byId("pos-search")?.addEventListener("input", renderPos);
+byId("payment-method")?.addEventListener("change", renderCart);
+byId("initial-payment-amount")?.addEventListener("input", renderCart);
 byId("customer-search")?.addEventListener("input", (event) => {
   renderCustomerResults((event.currentTarget as HTMLInputElement).value);
 });
@@ -1781,6 +2291,11 @@ document.addEventListener("click", async (event) => {
       (item) => item.id === Number(customerOption.dataset.customerSelect),
     );
     if (customer) renderCustomers(customer.id);
+    return;
+  }
+  const customerAccount = target.closest<HTMLElement>("[data-customer-account]");
+  if (customerAccount) {
+    await openCustomerAccount(Number(customerAccount.dataset.customerAccount));
     return;
   }
   const editCustomer = target.closest<HTMLElement>("[data-customer-edit]");
@@ -1939,17 +2454,35 @@ document.addEventListener("click", async (event) => {
     const product = productFor(id);
     if (!product) return;
     deleteProduct.closest("details")?.removeAttribute("open");
-    if (
-      !window.confirm(
-        `¿Eliminar "${product.name}" del catálogo? Sus ventas y movimientos anteriores se conservarán.`,
-      )
-    )
+    pendingProductDeleteId = id;
+    const name = byId("delete-product-name");
+    if (name) name.textContent = product.name;
+    byId<HTMLDialogElement>("delete-product-modal")?.showModal();
+    return;
+  }
+  const confirmDeleteProduct = target.closest<HTMLElement>(
+    "#confirm-delete-product",
+  );
+  if (confirmDeleteProduct) {
+    const id = pendingProductDeleteId;
+    const product = id === null ? undefined : productFor(id);
+    if (!product) {
+      byId<HTMLDialogElement>("delete-product-modal")?.close();
+      pendingProductDeleteId = null;
+      notify("No encontramos el producto que intentas eliminar.");
       return;
+    }
+    confirmDeleteProduct.setAttribute("aria-busy", "true");
+    (confirmDeleteProduct as HTMLButtonElement).disabled = true;
     try {
-      deletedProductSnapshots.set(id, product);
-      await inventoryRequest(`/productos/${id}`, { method: "DELETE" });
-      cart.delete(id);
+      deletedProductSnapshots.set(product.id, product);
+      await inventoryRequest(`/productos/${product.id}`, { method: "DELETE" });
+      product.variants.forEach((variant) => {
+        cart.delete(cartKey(variant.id, "UNIDAD"));
+        cart.delete(cartKey(variant.id, "CAJA"));
+      });
       await loadDashboardData();
+      byId<HTMLDialogElement>("delete-product-modal")?.close();
       notify("Producto eliminado del catálogo.");
     } catch (cause) {
       notify(
@@ -1957,48 +2490,43 @@ document.addEventListener("click", async (event) => {
           ? cause.message
           : "No se pudo eliminar el producto.",
       );
+    } finally {
+      pendingProductDeleteId = null;
+      confirmDeleteProduct.removeAttribute("aria-busy");
+      (confirmDeleteProduct as HTMLButtonElement).disabled = false;
     }
     return;
   }
-  const productBarcode = target.closest<HTMLElement>("[data-product-barcode]");
-  if (productBarcode) {
-    const product = productFor(Number(productBarcode.dataset.productBarcode));
-    if (product) showBarcode(product);
+  const variantBarcode = target.closest<HTMLElement>("[data-variant-barcode]");
+  if (variantBarcode) {
+    const item = variantFor(Number(variantBarcode.dataset.variantBarcode));
+    if (item) showBarcode(item.product, item.variant);
     return;
   }
   const addToCart = target.closest<HTMLElement>("[data-cart-add]");
   if (addToCart) {
-    const id = Number(addToCart.dataset.cartAdd);
-    const product = productFor(id);
-    const quantity = cart.get(id) ?? 0;
-    if (
-      product &&
-      quantity <
-        availableForSale(
-          product,
-          sales.find((sale) => sale.id === editingSaleId),
-        )
-    ) {
-      cart.set(id, quantity + 1);
-      renderCart();
-    }
+    addProductToCart(Number(addToCart.dataset.cartAdd));
     return;
   }
   const changeQuantity = target.closest<HTMLElement>("[data-cart-change]");
   if (changeQuantity) {
-    const id = Number(changeQuantity.dataset.cartChange);
-    const next = (cart.get(id) ?? 0) + Number(changeQuantity.dataset.delta);
-    const product = productFor(id);
-    if (next <= 0) cart.delete(id);
-    else if (
-      product &&
-      next <=
-        availableForSale(
-          product,
-          sales.find((sale) => sale.id === editingSaleId),
+    const key = changeQuantity.dataset.cartChange ?? "";
+    const { variantId, presentation } = parseCartKey(key);
+    const next = (cart.get(key) ?? 0) + Number(changeQuantity.dataset.delta);
+    const item = variantFor(variantId);
+    const maximum = item
+      ? availableForCart(
+          item.variant,
+          presentationUnits(item.product, presentation),
+          key,
         )
+      : 0;
+    if (next <= 0) cart.delete(key);
+    else if (
+      item &&
+      next <= maximum
     )
-      cart.set(id, next);
+      cart.set(key, next);
     renderCart();
     return;
   }
@@ -2018,14 +2546,22 @@ document.addEventListener("click", async (event) => {
   if (editSale) {
     const sale = sales.find((item) => item.id === editSale.dataset.saleEdit);
     if (!sale) return;
+    if (sale.payment === "Crédito") {
+      notify("Las ventas a crédito no se pueden editar; revisa la cuenta del cliente.");
+      return;
+    }
     editingSaleId = sale.id;
     activeCategory = "Todas";
     byId<HTMLInputElement>("pos-search")!.value = "";
     editedProductSnapshots.clear();
     for (const item of sale.items) {
-      if (products.some((product) => product.id === item.productId)) continue;
-      editedProductSnapshots.set(
-        item.productId,
+      const product = products.find((entry) => entry.id === item.productId);
+      if (product?.variants.some((variant) => variant.id === item.variantId)) {
+        continue;
+      }
+      const snapshot =
+        product ??
+        editedProductSnapshots.get(item.productId) ??
         normalizedProduct({
           id: item.productId,
           name: item.name,
@@ -2036,17 +2572,95 @@ document.addEventListener("click", async (event) => {
           price: item.price,
           stock: 0,
           minStock: 0,
-        }),
-      );
+          unitsPerBox: null,
+          boxPrice: null,
+          variants: [],
+        });
+      snapshot.variants.push({
+        id: item.variantId,
+        tallaId: 0,
+        size: item.size,
+        sku: "HISTORICO",
+        barcode: "",
+        stock: 0,
+        minStock: 0,
+      });
+      if (!product) editedProductSnapshots.set(item.productId, snapshot);
     }
     cart.clear();
-    sale.items.forEach((item) => cart.set(item.productId, item.quantity));
+    sale.items.forEach((item) =>
+      cart.set(
+        cartKey(item.variantId, item.presentation ?? "UNIDAD"),
+        item.quantity,
+      ),
+    );
     renderCustomers(sale.customerId);
     const payment = byId<HTMLSelectElement>("payment-method");
     if (payment) payment.value = sale.payment;
+    renderCart();
     switchView("pos", `Editar ${sale.id}`);
     return;
   }
+});
+
+byId("cart-items")?.addEventListener("change", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+    return;
+  }
+  const quantityInput = target.closest<HTMLInputElement>(
+    "[data-cart-quantity]",
+  );
+  if (quantityInput) {
+    const key = quantityInput.dataset.cartQuantity ?? "";
+    const requested = Number(quantityInput.value);
+    const { variantId, presentation } = parseCartKey(key);
+    const item = variantFor(variantId);
+    const maximum = item
+      ? availableForCart(
+          item.variant,
+          presentationUnits(item.product, presentation),
+          key,
+        )
+      : 0;
+    if (!Number.isInteger(requested) || requested < 1 || requested > maximum) {
+      notify(`Ingresa una cantidad entre 1 y ${maximum}.`);
+      renderCart();
+      return;
+    }
+    cart.set(key, requested);
+    renderCart();
+    return;
+  }
+  const presentationSelect = target.closest<HTMLSelectElement>(
+    "[data-cart-presentation]",
+  );
+  if (!presentationSelect) return;
+  const variantId = Number(presentationSelect.dataset.cartPresentation);
+  const previous =
+    presentationSelect.dataset.currentPresentation === "CAJA" ? "CAJA" : "UNIDAD";
+  const next = presentationSelect.value === "CAJA" ? "CAJA" : "UNIDAD";
+  const item = variantFor(variantId);
+  const previousKey = cartKey(variantId, previous);
+  const nextKey = cartKey(variantId, next);
+  if (!item) return;
+  const quantity = cart.get(previousKey) ?? 1;
+  const mergedQuantity = quantity + (cart.get(nextKey) ?? 0);
+  const maximum = availableForCart(
+    item.variant,
+    presentationUnits(item.product, next),
+    [previousKey, nextKey],
+  );
+  if (mergedQuantity > maximum) {
+    notify(
+      `Solo hay stock para ${maximum} ${next === "CAJA" ? "caja(s)" : "unidad(es)"}.`,
+    );
+    renderCart();
+    return;
+  }
+  cart.delete(previousKey);
+  cart.set(nextKey, mergedQuantity);
+  renderCart();
 });
 
 byId("clear-cart")?.addEventListener("click", () => {
@@ -2076,15 +2690,18 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
   const quantitiesMatch =
     cart.size === pendingSale.items.length &&
     pendingSale.items.every(
-      (item) => cart.get(item.productId) === item.quantity,
+      (item) =>
+        cart.get(cartKey(item.variantId, item.presentation)) === item.quantity,
     );
   const stockAvailable = pendingSale.items.every((item) => {
-    const product = productFor(item.productId);
+    const product = variantFor(item.variantId);
+    const key = cartKey(item.variantId, item.presentation);
     return (
       product &&
-      availableForSale(
-        product,
-        sales.find((sale) => sale.id === editingSaleId),
+      availableForCart(
+        product.variant,
+        item.unitsPerPresentation,
+        key,
       ) >= item.quantity
     );
   });
@@ -2106,9 +2723,18 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
       body: JSON.stringify({
         clienteId: pendingSale.customerId,
         metodoPago: pendingSale.payment,
+        ...(pendingSale.payment === "Crédito"
+          ? {
+              abonoInicial: pendingSale.paid ?? 0,
+              ...(pendingSale.paid && pendingSale.paid > 0
+                ? { metodoAbonoInicial: pendingSale.paymentMethodInitial }
+                : {}),
+            }
+          : {}),
         items: pendingSale.items.map((item) => ({
-          productoId: item.productId,
+          varianteId: item.variantId,
           cantidad: item.quantity,
+          presentacion: item.presentation,
         })),
       }),
     });
@@ -2164,31 +2790,52 @@ byId("complete-sale")?.addEventListener("click", () => {
   }
   if (cart.size === 0) return;
   const items: SaleLine[] = [];
-  for (const [id, quantity] of cart) {
-    const product = productFor(id);
+  for (const [key, quantity] of cart) {
+    const { variantId, presentation } = parseCartKey(key);
+    const item = variantFor(variantId);
+    const unitsPerPresentation = item
+      ? presentationUnits(item.product, presentation)
+      : 0;
     if (
-      !product ||
-      quantity >
-        availableForSale(
-          product,
-          sales.find((sale) => sale.id === editingSaleId),
-        )
+      !item ||
+      quantity > availableForCart(item.variant, unitsPerPresentation, key)
     ) {
       notify("El stock cambió. Revisa las cantidades antes de cobrar.");
       renderPos();
       return;
     }
     items.push({
-      productId: product.id,
-      name: product.name,
+      productId: item.product.id,
+      variantId: item.variant.id,
+      size: item.variant.size,
+      name: item.product.name,
+      presentation,
+      unitsPerPresentation,
       quantity,
-      price: product.price,
+      price: presentationPrice(item.product, presentation),
     });
   }
-  const total = items.reduce(
+  const total = Math.round(items.reduce(
     (sum, item) => sum + item.quantity * item.price,
     0,
-  );
+  ) * 100) / 100;
+  const payment = byId<HTMLSelectElement>("payment-method")?.value ?? "Efectivo";
+  const initialPayment =
+    payment === "Crédito"
+      ? Number(byId<HTMLInputElement>("initial-payment-amount")?.value ?? 0)
+      : 0;
+  if (
+    !Number.isFinite(initialPayment) ||
+    initialPayment < 0 ||
+    initialPayment > total
+  ) {
+    notify("El abono inicial debe estar entre $0 y el total de la venta.");
+    return;
+  }
+  if (payment === "Crédito" && editingSaleId) {
+    notify("No se pueden convertir ventas existentes en ventas a crédito.");
+    return;
+  }
   const pendingSale: Sale = {
     id: "",
     date: new Date(),
@@ -2196,8 +2843,12 @@ byId("complete-sale")?.addEventListener("click", () => {
     customerName: customer.name,
     customerPhone: customer.phone,
     items,
-    payment: byId<HTMLSelectElement>("payment-method")?.value ?? "Efectivo",
+    payment,
     total,
+    paid: initialPayment,
+    debt: payment === "Crédito" ? total - initialPayment : 0,
+    paymentMethodInitial:
+      byId<HTMLSelectElement>("initial-payment-method")?.value ?? "Efectivo",
   };
   showSaleConfirmation(pendingSale);
 });
