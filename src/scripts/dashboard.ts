@@ -29,11 +29,14 @@ interface Product {
 interface ProductVariant {
   id: number;
   tallaId: number;
+  colorId: number | null;
   size: string;
+  color: string | null;
   sku: string;
   barcode: string;
   stock: number;
   minStock: number;
+  price?: number;
 }
 
 interface Movement {
@@ -67,6 +70,9 @@ interface Sale {
   customerPhone?: string;
   items: SaleLine[];
   payment: string;
+  subtotal: number;
+  discountPercentage: number;
+  discountAmount: number;
   total: number;
   paid?: number;
   debt?: number;
@@ -92,6 +98,7 @@ const movements: Movement[] = [];
 const sales: Sale[] = [];
 const categories: Array<{ id: number; nombre: string }> = [];
 const tallas: Array<{ id: number; nombre: string; orden: number }> = [];
+const colors: Array<{ id: number; nombre: string }> = [];
 const inventoryUsers: ManagedInventoryUser[] = [];
 
 const cart = new Map<string, number>();
@@ -163,6 +170,25 @@ function variantFor(
   }
 }
 
+function variantLabel(variant: Pick<ProductVariant, "size" | "color">): string {
+  const size = variant.size === "Única" ? "" : variant.size;
+  return [size, variant.color].filter(Boolean).join(" · ") || "Única";
+}
+
+function productNameWithoutColor(product: Product): string {
+  const colorSuffix = product.variants
+    .flatMap((variant) => (variant.color ? [` + ${variant.color}`] : []))
+    .find((suffix) => product.name.endsWith(suffix));
+  return colorSuffix
+    ? product.name.slice(0, -colorSuffix.length).trimEnd()
+    : product.name;
+}
+
+function categoryIs(name: string, singular: string): boolean {
+  const normalized = name.trim().toLocaleLowerCase("es");
+  return normalized === singular || normalized === `${singular}s`;
+}
+
 function cartKey(variantId: number, presentation: "UNIDAD" | "CAJA"): string {
   return `${variantId}:${presentation}`;
 }
@@ -188,8 +214,21 @@ function presentationUnits(
 function presentationPrice(
   product: Product,
   presentation: "UNIDAD" | "CAJA",
+  variant?: ProductVariant,
 ): number {
-  return presentation === "CAJA" ? (product.boxPrice ?? 0) : product.price;
+  return presentation === "CAJA"
+    ? (product.boxPrice ?? 0)
+    : (variant?.price ?? product.price);
+}
+
+function productPriceLabel(product: Product): string {
+  const prices = product.variants.map((variant) => variant.price ?? product.price);
+  if (!prices.length) return currency.format(product.price);
+  const minimum = Math.min(...prices);
+  const maximum = Math.max(...prices);
+  return minimum === maximum
+    ? currency.format(minimum)
+    : `${currency.format(minimum)} – ${currency.format(maximum)}`;
 }
 
 function normalizedProduct(
@@ -219,6 +258,23 @@ function normalizedProduct(
 function notify(message: string): void {
   const toast = byId("toast");
   if (!toast) return;
+  const dialog = document.querySelector<HTMLDialogElement>("dialog[open]");
+  if (dialog) {
+    dialog.append(toast);
+    toast.classList.add("modal-toast");
+    dialog.addEventListener(
+      "close",
+      () => {
+        if (toast.parentElement !== dialog) return;
+        document.body.append(toast);
+        toast.classList.remove("modal-toast");
+      },
+      { once: true },
+    );
+  } else {
+    document.body.append(toast);
+    toast.classList.remove("modal-toast");
+  }
   window.clearTimeout(toastTimeout);
   toast.textContent = message;
   toast.classList.remove("translate-y-[-8px]", "opacity-0");
@@ -226,6 +282,10 @@ function notify(message: string): void {
   toastTimeout = window.setTimeout(() => {
     toast.classList.add("translate-y-[-8px]", "opacity-0");
     toast.classList.remove("translate-y-0", "opacity-100");
+    if (!document.querySelector("dialog[open]")) {
+      document.body.append(toast);
+      toast.classList.remove("modal-toast");
+    }
   }, 2600);
 }
 
@@ -318,6 +378,7 @@ async function loadDashboardData(): Promise<void> {
     movimientosApi,
     categoriasApi,
     tallasApi,
+    coloresApi,
     usuariosApi,
   ] = await Promise.all([
     inventoryRequest<
@@ -351,6 +412,9 @@ async function loadDashboardData(): Promise<void> {
       : Promise.resolve(
           [] as Array<{ id: number; nombre: string; orden: number }>,
         ),
+    currentUser.rol === "ADMIN"
+      ? inventoryRequest<Array<{ id: number; nombre: string }>>("/colores")
+      : Promise.resolve([] as Array<{ id: number; nombre: string }>),
     currentUser.rol === "ADMIN"
       ? inventoryRequest<ManagedInventoryUser[]>("/usuarios")
       : Promise.resolve([] as ManagedInventoryUser[]),
@@ -387,10 +451,12 @@ async function loadDashboardData(): Promise<void> {
   );
   categories.splice(0, categories.length, ...categoriasApi);
   tallas.splice(0, tallas.length, ...tallasApi);
+  colors.splice(0, colors.length, ...coloresApi);
   inventoryUsers.splice(0, inventoryUsers.length, ...usuariosApi);
   renderCategoryOptions();
   renderProductVariantFields();
   renderTallas();
+  renderColores();
   renderCategories();
   refreshViews();
   renderCustomers();
@@ -483,7 +549,7 @@ function renderSummary(): void {
               product,
             ) => `<div class="flex items-center gap-3 rounded-xl px-1 py-3">
           <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold">${escapeHtml(product.initials)}</div>
-          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Revisar: ${product.variants.filter((variant) => variant.stock <= variant.minStock).map((variant) => `${escapeHtml(variant.size)} (mín. ${variant.minStock})`).join(", ")}</p></div>
+          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Revisar: ${product.variants.filter((variant) => variant.stock <= variant.minStock).map((variant) => `${escapeHtml(variantLabel(variant))} (mín. ${variant.minStock})`).join(", ")}</p></div>
           <span class="rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700">${product.stock} uds.</span>
         </div>`,
           )
@@ -560,38 +626,239 @@ function renderTallas(): void {
   list.innerHTML = tallas
     .map(
       (talla) =>
-        `<li class="rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">${escapeHtml(talla.nombre)}</li>`,
+        `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(talla.nombre)}${talla.nombre === "Única" ? ' <small class="text-slate-400">(sistema)</small>' : ""}</span>${talla.nombre === "Única" ? "" : `<span class="flex gap-3"><button type="button" class="text-xs font-semibold text-[#287052]" data-size-edit="${talla.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-size-delete="${talla.id}">Eliminar</button></span>`}</li>`,
     )
     .join("");
 }
 
+function renderColores(): void {
+  const list = byId("colores-list");
+  if (list) {
+    list.innerHTML = colors
+      .map(
+        (color) =>
+          `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(color.nombre)}</span><span class="flex gap-3"><button type="button" class="text-xs font-semibold text-[#287052]" data-color-edit="${color.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-color-delete="${color.id}">Eliminar</button></span></li>`,
+      )
+      .join("") || '<li class="text-xs text-slate-400">Todavía no hay colores.</li>';
+  }
+}
+
+function resetSizeForm(): void {
+  const form = byId<HTMLFormElement>("talla-form");
+  if (!form) return;
+  form.reset();
+  (form.elements.namedItem("sizeId") as HTMLInputElement).value = "";
+  byId("size-form-label")!.textContent = "Nueva talla";
+  byId("save-size-button")!.textContent = "Agregar";
+  byId("cancel-size-edit")?.classList.add("hidden");
+}
+
+function resetColorForm(): void {
+  const form = byId<HTMLFormElement>("color-form");
+  if (!form) return;
+  form.reset();
+  (form.elements.namedItem("colorId") as HTMLInputElement).value = "";
+  byId("color-form-label")!.textContent = "Nuevo color";
+  byId("save-color-button")!.textContent = "Agregar";
+  byId("cancel-color-edit")?.classList.add("hidden");
+}
+
+function collectProductVariantDrafts(): ProductVariant[] {
+  return [
+    ...(byId("product-variants")?.querySelectorAll<HTMLElement>(
+      "[data-variant-row]",
+    ) ?? []),
+  ].map((row) => {
+    const tallaId = Number(row.dataset.variantSize);
+    const sizePrice = byId("product-size-prices")?.querySelector<HTMLInputElement>(
+      `[data-size-price="${tallaId}"]`,
+    );
+    return {
+      id: Number(row.dataset.variantId ?? 0),
+      tallaId,
+      colorId: Number(row.dataset.variantColor) || null,
+      size: row.dataset.sizeName ?? "",
+      color: row.dataset.colorName || null,
+      sku: "",
+      barcode: "",
+      stock: Number(
+        row.querySelector<HTMLInputElement>("[data-variant-stock]")?.value ?? 0,
+      ),
+      minStock: Number(
+        row.querySelector<HTMLInputElement>("[data-variant-min-stock]")?.value ??
+          0,
+      ),
+      price: Number(sizePrice?.value ?? row.dataset.variantPrice ?? 0),
+    };
+  });
+}
+
 function renderProductVariantFields(
-  selectedVariants: ProductVariant[] = [],
-  selectUniqueByDefault = true,
+  selectedVariants?: ProductVariant[],
 ): void {
   const container = byId("product-variants");
   if (!container) return;
-  container.innerHTML = tallas
-    .map((talla) => {
-      const existing = selectedVariants.find(
-        (variant) => variant.tallaId === talla.id,
+  const currentDrafts = selectedVariants ?? collectProductVariantDrafts();
+  const sizesContainer = byId("product-sizes");
+  const sizePricesContainer = byId("product-size-prices");
+  const colorsContainer = byId("product-colors");
+  const selectedSizeIds =
+    selectedVariants !== undefined
+      ? [
+          ...new Set(
+            selectedVariants
+              .filter((variant) => variant.size !== "Única")
+              .map((variant) => variant.tallaId),
+          ),
+        ]
+      : [
+          ...(sizesContainer?.querySelectorAll<HTMLInputElement>(
+            "[data-size-option]:checked",
+          ) ?? []),
+        ].map((input) => Number(input.dataset.sizeOption));
+  const selectedColorIds =
+    selectedVariants !== undefined
+      ? [
+          ...new Set(
+            selectedVariants.flatMap((variant) =>
+              variant.colorId === null ? [] : [variant.colorId],
+            ),
+          ),
+        ]
+      : [
+          ...(colorsContainer?.querySelectorAll<HTMLInputElement>(
+            "[data-color-option]:checked:not([data-color-option='none'])",
+          ) ?? []),
+        ].map((input) => Number(input.dataset.colorOption));
+  const noColorSelected =
+    selectedVariants !== undefined
+      ? selectedVariants.some((variant) => variant.colorId === null)
+      : Boolean(
+          colorsContainer?.querySelector<HTMLInputElement>(
+            "[data-color-option='none']:checked",
+          ),
+        );
+  const categoryId = Number(
+    byId<HTMLSelectElement>("product-category")?.value ?? 0,
+  );
+  const categoryName =
+    categories.find((category) => category.id === categoryId)?.nombre ?? "";
+  const isGarment = categoryIs(categoryName, "prenda");
+  const isSupply = categoryIs(categoryName, "insumo");
+  const variantLegend = byId("product-variants-label");
+  if (variantLegend) {
+    variantLegend.textContent = isGarment
+      ? "Tallas y existencias iniciales"
+      : "Existencias iniciales";
+  }
+  byId("box-options")?.classList.toggle("hidden", !isSupply);
+  byId("size-options")?.classList.toggle("hidden", !isGarment);
+  byId("color-options")?.classList.toggle("hidden", !isGarment);
+  const boxToggle = byId<HTMLInputElement>("product-sells-by-box");
+  const boxFields = byId("box-price-fields");
+  const unitsInput = byId<HTMLFormElement>("product-form")?.elements.namedItem(
+    "unitsPerBox",
+  ) as HTMLInputElement | null;
+  const boxPriceInput = byId<HTMLFormElement>("product-form")?.elements.namedItem(
+    "boxPrice",
+  ) as HTMLInputElement | null;
+  if (!isSupply && boxToggle) {
+    boxToggle.checked = false;
+    if (unitsInput) unitsInput.value = "";
+    if (boxPriceInput) boxPriceInput.value = "";
+  }
+  const boxEnabled = isSupply && Boolean(boxToggle?.checked);
+  if (boxFields instanceof HTMLElement) boxFields.hidden = !boxEnabled;
+  if (unitsInput) unitsInput.required = boxEnabled;
+  if (boxPriceInput) boxPriceInput.required = boxEnabled;
+
+  const chosenSizes = new Set(selectedSizeIds);
+  const sizePrices = new Map<number, number>();
+  for (const variant of currentDrafts) {
+    if (
+      !sizePrices.has(variant.tallaId) &&
+      variant.price !== undefined &&
+      variant.price > 0
+    ) {
+      sizePrices.set(variant.tallaId, variant.price);
+    }
+  }
+  for (const input of sizePricesContainer?.querySelectorAll<HTMLInputElement>(
+    "[data-size-price]",
+  ) ?? []) {
+    const price = Number(input.value);
+    if (Number.isFinite(price) && price > 0) {
+      sizePrices.set(Number(input.dataset.sizePrice), price);
+    }
+  }
+  if (sizesContainer) {
+    sizesContainer.innerHTML = tallas
+      .filter((talla) => talla.nombre !== "Única")
+      .map(
+        (talla) =>
+          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-[#287052]" data-size-option="${talla.id}" ${chosenSizes.has(talla.id) ? "checked" : ""} />${escapeHtml(talla.nombre)}</label>`,
+      )
+      .join("") || '<span class="text-xs text-slate-400">Agrega tallas antes de crear una prenda.</span>';
+  }
+  if (sizePricesContainer) {
+    const basePriceInput = byId<HTMLFormElement>("product-form")?.elements
+      .namedItem("price");
+    const defaultPrice =
+      basePriceInput instanceof HTMLInputElement
+        ? Number(basePriceInput.value)
+        : 0;
+    sizePricesContainer.innerHTML = selectedSizeIds
+      .map((tallaId) => {
+        const talla = tallas.find((item) => item.id === tallaId);
+        const hasStoredPrice = currentDrafts.some(
+          (variant) => variant.tallaId === tallaId && (variant.price ?? 0) > 0,
+        );
+        return `<label class="form-label">${escapeHtml(talla?.nombre ?? "Talla")} · Precio<input class="form-input" type="number" min="0.01" step="0.01" required data-size-price="${tallaId}" data-size-price-default="${hasStoredPrice ? "false" : "true"}" value="${sizePrices.get(tallaId) ?? (defaultPrice > 0 ? defaultPrice : "")}" /></label>`;
+      })
+      .join("");
+  }
+  if (colorsContainer) {
+    const colorOptions = colors
+      .map(
+        (color) =>
+          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-[#287052]" data-color-option="${color.id}" ${selectedColorIds.includes(color.id) ? "checked" : ""} />${escapeHtml(color.nombre)}</label>`,
+      )
+      .join("");
+    colorsContainer.innerHTML = `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-[#287052]" data-color-option="none" ${noColorSelected ? "checked" : ""} />Sin color</label>${colorOptions || '<span class="text-xs text-slate-400">Agrega colores en “Administrar colores”.</span>'}`;
+  }
+
+  const activeSizeIds = isGarment
+    ? selectedSizeIds
+    : [tallas.find((talla) => talla.nombre === "Única")?.id ?? 0];
+  const activeColorIds: Array<number | null> = isGarment
+    ? [...selectedColorIds]
+    : [null];
+  if (isGarment && noColorSelected) activeColorIds.push(null);
+  if (!activeColorIds.length) activeColorIds.push(null);
+
+  const variants = activeSizeIds.flatMap((tallaId) =>
+    activeColorIds.map((colorId) => {
+      const talla = tallas.find((item) => item.id === tallaId);
+      const color = colors.find((item) => item.id === colorId);
+      const previous = currentDrafts.find(
+        (variant) =>
+          variant.tallaId === tallaId && variant.colorId === colorId,
       );
-      const selected =
-        Boolean(existing) || (selectUniqueByDefault && talla.nombre === "Única");
-      return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2">
-        <label class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <input class="accent-[#287052]" type="checkbox" data-variant-size="${talla.id}" ${selected ? "checked" : ""} />
-          ${escapeHtml(talla.nombre)}
-        </label>
-        <label class="text-[10px] font-medium text-slate-500">Stock
-          <input id="variant-stock-${talla.id}" class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-stock="${talla.id}" value="${existing?.stock ?? 0}" ${selected ? "" : "disabled"} />
-        </label>
-        <label class="text-[10px] font-medium text-slate-500">Mínimo
-          <input id="variant-min-stock-${talla.id}" class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-min-stock="${talla.id}" value="${existing?.minStock ?? 5}" ${selected ? "" : "disabled"} />
-        </label>
+      return { tallaId, colorId, talla, color, previous };
+    }),
+  );
+  container.innerHTML = variants
+    .filter((variant) => variant.tallaId > 0)
+    .map(({ tallaId, colorId, talla, color, previous }) => {
+      const label = [talla?.nombre, color?.nombre].filter(Boolean).join(" · ");
+      return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2" data-variant-row data-variant-id="${previous?.id ?? ""}" data-variant-size="${tallaId}" data-variant-color="${colorId ?? ""}" data-variant-price="${previous?.price ?? ""}" data-size-name="${escapeHtml(talla?.nombre ?? "")}" data-color-name="${escapeHtml(color?.nombre ?? "")}">
+        <span class="text-sm font-semibold text-slate-700">${escapeHtml(label)}</span>
+        <label class="text-[10px] font-medium text-slate-500">Stock<input class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-stock value="${previous?.stock ?? 0}" /></label>
+        <label class="text-[10px] font-medium text-slate-500">Mínimo<input class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-min-stock value="${previous?.minStock ?? 5}" /></label>
       </div>`;
     })
-    .join("");
+    .join("") ||
+    `<p class="text-xs text-slate-400">${isGarment ? "Selecciona al menos una talla para configurar sus existencias." : "Selecciona colores o configura el stock de la variante única."}</p>`;
 }
 
 function renderCategories(): void {
@@ -771,6 +1038,9 @@ async function openCustomerAccount(
       ventas: Array<{
         id: string;
         fecha: string | Date;
+        subtotal: number;
+        descuentoPorcentaje: number;
+        descuentoMonto: number;
         total: number;
         pagado: number;
         saldo: number;
@@ -816,7 +1086,7 @@ async function openCustomerAccount(
                   <p class="mt-1 text-[11px] text-slate-500">${venta.items.map((item) => `${escapeHtml(item.nombre)} ${escapeHtml(item.talla)} × ${item.cantidad} ${item.presentacion === "CAJA" ? "(caja)" : ""}`).join(", ")}</p>
                 </div>
                 <div class="shrink-0 text-right text-xs">
-                  <p>Total ${currency.format(venta.total)}</p><p class="text-emerald-700">Abonado ${currency.format(venta.pagado)}</p>
+                  <p>Subtotal ${currency.format(venta.subtotal)}</p>${venta.descuentoPorcentaje > 0 ? `<p class="text-rose-600">Descuento ${venta.descuentoPorcentaje}% · −${currency.format(venta.descuentoMonto)}</p>` : ""}<p>Total ${currency.format(venta.total)}</p><p class="text-emerald-700">Abonado ${currency.format(venta.pagado)}</p>
                   <p class="font-bold ${venta.saldo > 0 ? "text-rose-700" : "text-slate-500"}">Debe ${currency.format(venta.saldo)}</p>
                 </div>
               </div>
@@ -889,7 +1159,7 @@ function renderProducts(): void {
   const filtered = [...products, ...editedProductSnapshots.values()].filter(
     (product) =>
       `${product.name} ${product.sku} ${product.barcode} ${product.variants
-        .map((variant) => `${variant.size} ${variant.sku} ${variant.barcode}`)
+        .map((variant) => `${variantLabel(variant)} ${variant.sku} ${variant.barcode}`)
         .join(" ")}`
         .toLowerCase()
         .includes(search) &&
@@ -911,14 +1181,14 @@ function renderProducts(): void {
       <td><div class="flex flex-wrap gap-1">${product.variants
         .map(
           (variant) => `<span class="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[10px]">
-            <span class="font-semibold text-slate-600">${escapeHtml(variant.size)} · ${variant.stock}</span>
-            <button class="font-mono text-[#287052] hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variant.size)}">${escapeHtml(variant.barcode)}</button>
-            <button class="font-bold text-[#287052]" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variant.size)}">＋</button>
+            <span class="font-semibold text-slate-600">${escapeHtml(variantLabel(variant))} · ${variant.stock}</span>
+            <button class="font-mono text-[#287052] hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variantLabel(variant))}">${escapeHtml(variant.barcode)}</button>
+            <button class="font-bold text-[#287052]" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variantLabel(variant))}">＋</button>
           </span>`,
         )
         .join("")}</div></td>
       <td class="text-slate-500">${escapeHtml(product.category)}</td>
-      <td class="font-semibold text-slate-700">${currency.format(product.price)}</td>
+      <td class="font-semibold text-slate-700">${productPriceLabel(product)}</td>
       <td><span class="font-semibold ${low ? "text-rose-700" : "text-slate-700"}">${product.stock}</span><span class="ml-1 text-[10px] text-slate-400">uds.</span></td>
       <td><span class="rounded-full px-2.5 py-1 text-[10px] font-bold ${out ? "bg-slate-100 text-slate-500" : low ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}">${out ? "Agotado" : low ? "Stock bajo" : "Disponible"}</span></td>
       <td class="text-right">
@@ -965,7 +1235,7 @@ function renderPos(): void {
       .filter(
         (variant) =>
           availableForSale(variant, editedSale) > 0 &&
-          `${product.name} ${product.sku} ${product.barcode} ${variant.size} ${variant.sku} ${variant.barcode}`
+          `${product.name} ${product.sku} ${product.barcode} ${variantLabel(variant)} ${variant.sku} ${variant.barcode}`
             .toLowerCase()
             .includes(search) &&
           (activeCategory === "Todas" || product.category === activeCategory),
@@ -979,11 +1249,11 @@ function renderPos(): void {
         ({ product, variant }) => `
     <button class="product-tile group text-left" data-cart-add="${variant.id}">
       <div class="flex h-28 items-center justify-center rounded-xl ${product.tone} transition group-hover:brightness-[0.98]">
-        <span class="text-2xl font-black tracking-wide opacity-70">${escapeHtml(variant.size)}</span>
+        <span class="text-2xl font-black tracking-wide opacity-70">${escapeHtml(variantLabel(variant))}</span>
       </div>
       <div class="mt-3 flex items-start justify-between gap-2">
-        <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Talla ${escapeHtml(variant.size)} · ${availableForSale(variant, editedSale)} disponibles</p></div>
-        <span class="shrink-0 text-right text-xs font-bold text-[#1e6047]">${currency.format(product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
+        <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">${escapeHtml(variantLabel(variant))} · ${availableForSale(variant, editedSale)} disponibles</p></div>
+        <span class="shrink-0 text-right text-xs font-bold text-[#1e6047]">${currency.format(variant.price ?? product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
       </div>
     </button>
   `,
@@ -1029,13 +1299,27 @@ function renderCart(): void {
     );
   const items = byId("cart-items");
   const itemCount = entries.reduce((total, entry) => total + entry.quantity, 0);
-  const total = entries.reduce(
+  const subtotal = entries.reduce(
     (sum, entry) =>
       sum +
-      presentationPrice(entry.item.product, entry.presentation) *
+      presentationPrice(
+        entry.item.product,
+        entry.presentation,
+        entry.item.variant,
+      ) *
         entry.quantity,
     0,
   );
+  const discountInput = byId<HTMLInputElement>("sale-discount");
+  const discountPercentage = Number(discountInput?.value ?? 0);
+  const discountValid =
+    Number.isFinite(discountPercentage) &&
+    discountPercentage >= 0 &&
+    discountPercentage <= 100;
+  const discountAmount = discountValid
+    ? Math.round(subtotal * discountPercentage) / 100
+    : 0;
+  const total = Math.round((subtotal - discountAmount) * 100) / 100;
   if (items)
     items.innerHTML = entries
       .map(
@@ -1046,12 +1330,16 @@ function renderCart(): void {
             unidades,
             key,
           );
-          const linePrice = presentationPrice(item.product, presentation);
+          const linePrice = presentationPrice(
+            item.product,
+            presentation,
+            item.variant,
+          );
           return `
     <div class="flex items-center gap-3 py-4">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.product.tone} text-[10px] font-bold">${escapeHtml(item.variant.size)}</div>
+      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.product.tone} text-[10px] font-bold">${escapeHtml(variantLabel(item.variant))}</div>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(item.product.name)} · ${escapeHtml(item.variant.size)}</p>
+        <p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(item.product.name)} · ${escapeHtml(variantLabel(item.variant))}</p>
         ${item.product.unitsPerBox && item.product.boxPrice ? `<select class="form-input mt-1 h-7 max-w-28 px-2 text-[10px]" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad · ${currency.format(item.product.price)}</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox}) · ${currency.format(item.product.boxPrice)}</option></select>` : `<p class="mt-1 text-[10px] text-slate-400">${currency.format(linePrice)} / unidad</p>`}
       </div>
       <div class="flex items-center gap-1.5">
@@ -1065,7 +1353,14 @@ function renderCart(): void {
       )
       .join("");
   byId("cart-count")!.textContent = String(itemCount);
-  byId("cart-subtotal")!.textContent = currency.format(total);
+  byId("cart-subtotal")!.textContent = currency.format(subtotal);
+  byId("cart-discount-row")?.classList.toggle(
+    "hidden",
+    !discountValid || discountPercentage <= 0,
+  );
+  byId("cart-discount-label")!.textContent =
+    `Descuento (${discountPercentage || 0}%)`;
+  byId("cart-discount")!.textContent = `−${currency.format(discountAmount)}`;
   byId("cart-total")!.textContent = currency.format(total);
   byId("cart-empty")?.classList.toggle("hidden", entries.length > 0);
   const hasCustomer = Boolean(
@@ -1087,14 +1382,19 @@ function renderCart(): void {
   const completeButton = byId<HTMLButtonElement>("complete-sale");
   if (completeButton) {
     completeButton.disabled =
-      entries.length === 0 || !hasCustomer || !initialPaymentValid;
+      entries.length === 0 ||
+      !hasCustomer ||
+      !initialPaymentValid ||
+      !discountValid;
     completeButton.textContent = editingSaleId
       ? "Guardar cambios de venta"
       : "Completar venta";
   }
   const requirements = byId("sale-requirements");
   if (requirements) {
-    requirements.textContent = !hasCustomer
+    requirements.textContent = !discountValid
+      ? "El descuento debe estar entre 0% y 100%."
+      : !hasCustomer
       ? "Selecciona un cliente para completar la venta."
       : entries.length === 0
         ? "Agrega productos para continuar."
@@ -1228,7 +1528,7 @@ function renderSales(): void {
       <td class="text-xs text-slate-500">${dateTime.format(sale.date)}</td>
       <td class="text-slate-600">${sale.items.reduce((sum, item) => sum + item.quantity, 0)} artículos</td>
       <td><span class="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">${escapeHtml(sale.payment)}</span></td>
-      <td class="text-right font-bold text-slate-700">${currency.format(sale.total)}</td>
+      <td class="text-right"><strong class="font-bold text-slate-700">${currency.format(sale.total)}</strong>${sale.discountPercentage > 0 ? `<small class="block text-[10px] font-medium text-rose-600">−${sale.discountPercentage}% · ${currency.format(sale.discountAmount)}</small>` : ""}</td>
       <td>
         <div class="flex items-center justify-end gap-1">
         ${sale.payment === "Crédito" ? '<button class="sale-action cursor-not-allowed opacity-45" type="button" disabled title="Las ventas a crédito no se pueden editar">No editable</button>' : `<button class="sale-action" data-sale-edit="${escapeHtml(sale.id)}">Editar</button>`}
@@ -1398,6 +1698,9 @@ function exportSalesCsv(): void {
     "Método de pago",
     "Productos",
     "Unidades",
+    "Subtotal",
+    "Descuento (%)",
+    "Descuento ($)",
     "Total",
   ];
   const rows = filtered.map((sale) => [
@@ -1410,6 +1713,9 @@ function exportSalesCsv(): void {
       .map((item) => `${item.name} (${item.size}) x${item.quantity}`)
       .join(" | "),
     sale.items.reduce((sum, item) => sum + item.quantity, 0),
+    sale.subtotal.toFixed(2),
+    sale.discountPercentage.toFixed(2),
+    sale.discountAmount.toFixed(2),
     sale.total.toFixed(2),
   ]);
   const csv = [headers, ...rows]
@@ -1452,6 +1758,8 @@ function receiptMarkup(sale: Sale): string {
         )
         .join("")}
     </div>
+    <div class="receipt-total"><span>Subtotal</span><strong>${currency.format(sale.subtotal)}</strong></div>
+    ${sale.discountPercentage > 0 ? `<div class="receipt-total"><span>Descuento (${sale.discountPercentage}%)</span><strong>−${currency.format(sale.discountAmount)}</strong></div>` : ""}
     <div class="receipt-total"><span>Total</span><strong>${currency.format(sale.total)}</strong></div>
     <p class="receipt-thanks">Gracias por tu compra</p>`;
 }
@@ -1479,6 +1787,8 @@ function showSaleConfirmation(sale: Sale): void {
           ${sale.items.map((item) => `<div class="flex items-center justify-between gap-4 py-3 text-sm"><span class="min-w-0"><span class="font-semibold text-slate-700">${escapeHtml(item.name)} · ${escapeHtml(item.size)}</span><span class="ml-2 text-xs text-slate-400">× ${item.quantity} ${item.presentation === "CAJA" ? `caja(s) de ${item.unitsPerPresentation}` : "unidad(es)"}</span></span><span class="shrink-0 font-semibold text-slate-700">${currency.format(item.quantity * item.price)}</span></div>`).join("")}
         </div>
         <div class="space-y-2 border-t border-[#edf0ec] bg-[#fafbf9] px-4 py-4">
+          <div class="flex items-center justify-between text-xs text-slate-500"><span>Subtotal</span><span>${currency.format(sale.subtotal)}</span></div>
+          ${sale.discountPercentage > 0 ? `<div class="flex items-center justify-between text-xs font-semibold text-rose-600"><span>Descuento (${sale.discountPercentage}%)</span><span>−${currency.format(sale.discountAmount)}</span></div>` : ""}
           <div class="flex items-center justify-between"><span class="text-sm font-bold text-slate-600">Total</span><strong class="text-lg font-bold text-[#1d5d43]">${currency.format(sale.total)}</strong></div>
           ${credit ? `<div class="flex items-center justify-between text-xs"><span>Abono al entregar · ${escapeHtml(String(sale.paymentMethodInitial ?? "Efectivo"))}</span><strong>${currency.format(sale.paid ?? 0)}</strong></div><div class="flex items-center justify-between text-sm font-bold text-rose-700"><span>Deuda pendiente</span><strong>${currency.format(sale.debt ?? sale.total)}</strong></div>` : ""}
         </div>
@@ -1489,8 +1799,14 @@ function showSaleConfirmation(sale: Sale): void {
       <button type="button" class="secondary-button" data-close="sale-confirm-modal">Volver a la venta</button>
       <button type="button" id="confirm-sale-button" class="primary-button">${editing ? "Guardar cambios" : credit ? "Confirmar entrega y deuda" : "Confirmar venta"} · ${currency.format(sale.total)}</button>
     </div>`;
-  byId("confirm-sale-button")?.addEventListener("click", () =>
-    confirmSale(sale),
+  byId<HTMLButtonElement>("confirm-sale-button")?.addEventListener(
+    "click",
+    (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      button.disabled = true;
+      button.textContent = "Procesando venta...";
+      void confirmSale(sale);
+    },
   );
   dialog.showModal();
 }
@@ -1606,6 +1922,20 @@ function downloadSaleReceipt(sale: Sale): void {
   }
 
   y += 6;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  pdf.setTextColor(113, 128, 120);
+  pdf.text("Subtotal", margin + 3, y);
+  pdf.text(currency.format(sale.subtotal), right - 3, y, { align: "right" });
+  if (sale.discountPercentage > 0) {
+    y += 6;
+    pdf.setTextColor(190, 60, 75);
+    pdf.text(`Descuento (${sale.discountPercentage}%)`, margin + 3, y);
+    pdf.text(`-${currency.format(sale.discountAmount)}`, right - 3, y, {
+      align: "right",
+    });
+  }
+  y += 7;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(13);
   pdf.setTextColor(23, 61, 50);
@@ -1658,7 +1988,7 @@ function openMovementFor(variantId?: number): void {
     .flatMap((product) =>
       product.variants.map(
         (variant) =>
-          `<option value="${variant.id}">${escapeHtml(product.name)} · ${escapeHtml(variant.size)} · ${variant.stock} uds.</option>`,
+          `<option value="${variant.id}">${escapeHtml(product.name)} · ${escapeHtml(variantLabel(variant))} · ${variant.stock} uds.</option>`,
       ),
     )
     .join("");
@@ -1723,7 +2053,7 @@ function showBarcode(product: Product, variant: ProductVariant): void {
   const dialog = byId<HTMLDialogElement>("barcode-modal");
   if (!content || !dialog) return;
   content.innerHTML = `
-    <div class="modal-heading"><div><h2 class="text-lg font-bold">Código de barras</h2><p class="mt-1 text-xs text-slate-500">${escapeHtml(product.name)} · Talla ${escapeHtml(variant.size)} · ${escapeHtml(variant.sku)}</p></div><button type="button" class="modal-close" data-close="barcode-modal" aria-label="Cerrar">✕</button></div>
+    <div class="modal-heading"><div><h2 class="text-lg font-bold">Código de barras</h2><p class="mt-1 text-xs text-slate-500">${escapeHtml(product.name)} · ${escapeHtml(variantLabel(variant))} · ${escapeHtml(variant.sku)}</p></div><button type="button" class="modal-close" data-close="barcode-modal" aria-label="Cerrar">✕</button></div>
     <div class="barcode-preview"><svg id="barcode-svg" role="img" aria-label="Código de barras ${escapeHtml(variant.barcode)}"></svg></div>
     <p class="pb-5 text-center font-mono text-xs tracking-wider text-slate-500">${escapeHtml(variant.barcode)}</p>
     <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="barcode-modal">Cerrar</button><button type="button" id="print-barcode" class="primary-button">Imprimir código</button></div>`;
@@ -1749,13 +2079,17 @@ function openProductEditor(productId: number): void {
   if (!product || !form || !dialog) return;
   const data = new FormData();
   data.set("productId", String(product.id));
-  data.set("name", product.name);
+  data.set("name", productNameWithoutColor(product));
   data.set("price", String(product.price));
   data.set("unitsPerBox", product.unitsPerBox ? String(product.unitsPerBox) : "");
   data.set("boxPrice", product.boxPrice ? String(product.boxPrice) : "");
   form.reset();
   renderCategoryOptions(product.categoryId);
-  renderProductVariantFields(product.variants, false);
+  const sellsByBox =
+    product.unitsPerBox !== null && product.boxPrice !== null;
+  const boxToggle = byId<HTMLInputElement>("product-sells-by-box");
+  if (boxToggle) boxToggle.checked = sellsByBox;
+  renderProductVariantFields(product.variants);
   for (const [name, value] of data) {
     const field = form.elements.namedItem(name);
     if (field instanceof HTMLInputElement) field.value = String(value);
@@ -1772,7 +2106,7 @@ function openNewProductForm(): void {
   if (!form) return;
   form.reset();
   renderCategoryOptions();
-  renderProductVariantFields();
+  renderProductVariantFields([]);
   const skuDisplay = byId<HTMLInputElement>("product-sku-display");
   if (skuDisplay) skuDisplay.value = "Se asignará al guardar";
   byId("product-modal-title")!.textContent = "Nuevo producto";
@@ -1809,7 +2143,7 @@ function scanBarcode(value: string): void {
   if (!item) {
     notify(`No encontramos un producto con el código ${code}.`);
   } else if (item.variant.stock < 1) {
-    notify(`${item.product.name} talla ${item.variant.size} no tiene existencias.`);
+    notify(`${item.product.name} ${variantLabel(item.variant)} no tiene existencias.`);
   } else {
     addProductToCart(item.variant.id);
     byId<HTMLInputElement>("barcode-input")?.focus();
@@ -1869,6 +2203,28 @@ document.querySelectorAll<HTMLButtonElement>("[data-go]").forEach((button) => {
   );
 });
 
+document.addEventListener(
+  "toggle",
+  (event) => {
+    const openedMenu = event.target;
+    if (
+      !(openedMenu instanceof HTMLDetailsElement) ||
+      !openedMenu.matches(".product-options") ||
+      !openedMenu.open
+    ) {
+      return;
+    }
+    document
+      .querySelectorAll<HTMLDetailsElement>(
+        "#products-table .product-options[open]",
+      )
+      .forEach((menu) => {
+        if (menu !== openedMenu) menu.open = false;
+      });
+  },
+  true,
+);
+
 byId("open-sidebar")?.addEventListener("click", () => {
   byId("sidebar")?.classList.remove("-translate-x-full");
   byId("sidebar-scrim")?.classList.remove("hidden");
@@ -1878,8 +2234,14 @@ byId("sidebar-scrim")?.addEventListener("click", closeSidebar);
 
 byId("open-product-modal")?.addEventListener("click", openNewProductForm);
 byId("open-tallas-modal")?.addEventListener("click", () => {
+  resetSizeForm();
   renderTallas();
   byId<HTMLDialogElement>("tallas-modal")?.showModal();
+});
+byId("open-colores-modal")?.addEventListener("click", () => {
+  resetColorForm();
+  renderColores();
+  byId<HTMLDialogElement>("colores-modal")?.showModal();
 });
 byId("open-movement-modal")?.addEventListener("click", () => openMovementFor());
 function openCustomerForm(customer?: Customer): void {
@@ -2024,22 +2386,13 @@ byId("product-form")?.addEventListener("submit", async (event) => {
   const productId = Number(data.get("productId")) || null;
   const name = String(data.get("name") ?? "").trim();
   const categoryId = Number(data.get("categoryId"));
-  const variantInputs = [
-    ...(byId("product-variants")?.querySelectorAll<HTMLInputElement>(
-      "[data-variant-size]:checked",
-    ) ?? []),
-  ];
-  const variants = variantInputs.map((checkbox) => {
-    const tallaId = Number(checkbox.dataset.variantSize);
-    const stock = Number(
-      byId<HTMLInputElement>(`variant-stock-${tallaId}`)?.value,
-    );
+  const variants = collectProductVariantDrafts().map((variant) => {
     return {
-      tallaId,
-      existencia: stock,
-      stockMinimo: Number(
-        byId<HTMLInputElement>(`variant-min-stock-${tallaId}`)?.value,
-      ),
+      tallaId: variant.tallaId,
+      ...(variant.colorId ? { colorId: variant.colorId } : {}),
+      existencia: variant.stock,
+      stockMinimo: variant.minStock,
+      precio: variant.price,
     };
   });
   const previous = productId ? productFor(productId) : undefined;
@@ -2051,25 +2404,38 @@ byId("product-form")?.addEventListener("submit", async (event) => {
     !Number.isInteger(variant.existencia) ||
     variant.existencia < 0 ||
     !Number.isInteger(variant.stockMinimo) ||
-    variant.stockMinimo < 0
+    variant.stockMinimo < 0 ||
+    typeof variant.precio !== "number" ||
+    !Number.isFinite(variant.precio) ||
+    variant.precio <= 0
   )) {
-    notify("Selecciona al menos una talla e ingresa stocks válidos.");
+    notify("Configura variantes con precio y valores de stock válidos.");
     return;
   }
+  const categoryName =
+    categories.find((category) => category.id === categoryId)?.nombre ?? "";
+  const isSupply = categoryIs(categoryName, "insumo");
+  const sellsByBox =
+    isSupply &&
+    Boolean(byId<HTMLInputElement>("product-sells-by-box")?.checked);
   const payload = {
     nombre: name,
     categoriaId: categoryId,
     precio: Number(data.get("price")),
-    unidadesPorCaja:
-      String(data.get("unitsPerBox") ?? "").trim() === ""
+    unidadesPorCaja: sellsByBox
+      ? String(data.get("unitsPerBox") ?? "").trim() === ""
         ? null
-        : Number(data.get("unitsPerBox")),
-    precioCaja:
-      String(data.get("boxPrice") ?? "").trim() === ""
+        : Number(data.get("unitsPerBox"))
+      : null,
+    precioCaja: sellsByBox
+      ? String(data.get("boxPrice") ?? "").trim() === ""
         ? null
-        : Number(data.get("boxPrice")),
+        : Number(data.get("boxPrice"))
+      : null,
     variantes: variants,
   };
+  const saveButton = byId<HTMLButtonElement>("save-product-button");
+  if (saveButton) saveButton.disabled = true;
   try {
     const saved = previous
       ? await inventoryRequest<Omit<Product, "tone" | "initials">>(
@@ -2096,7 +2462,7 @@ byId("product-form")?.addEventListener("submit", async (event) => {
     notify(
       previous
         ? "Producto actualizado."
-        : `Producto agregado con ${updated.variants.length} talla(s) y códigos generados.`,
+        : `Producto agregado con ${updated.variants.length} variante(s) y códigos generados.`,
     );
   } catch (cause) {
     notify(
@@ -2104,6 +2470,8 @@ byId("product-form")?.addEventListener("submit", async (event) => {
         ? cause.message
         : "No se pudo guardar el producto.",
     );
+  } finally {
+    if (saveButton) saveButton.disabled = false;
   }
 });
 
@@ -2183,41 +2551,98 @@ byId("movement-form")?.addEventListener("submit", async (event) => {
   }
 });
 
-byId("product-variants")?.addEventListener("change", (event) => {
+byId("product-category")?.addEventListener("change", () =>
+  renderProductVariantFields(),
+);
+byId("product-sells-by-box")?.addEventListener("change", () =>
+  renderProductVariantFields(),
+);
+byId<HTMLInputElement>("product-price")?.addEventListener(
+  "input",
+  (event) => {
+    const basePrice = (event.currentTarget as HTMLInputElement).value;
+    byId("product-size-prices")
+      ?.querySelectorAll<HTMLInputElement>(
+        '[data-size-price-default="true"]',
+      )
+      .forEach((input) => {
+        input.value = basePrice;
+      });
+  },
+);
+byId("product-size-prices")?.addEventListener("input", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement) || !target.matches("[data-variant-size]")) {
-    return;
+  if (target instanceof HTMLInputElement && target.matches("[data-size-price]")) {
+    target.dataset.sizePriceDefault = "false";
   }
-  const tallaId = Number(target.dataset.variantSize);
-  const enabled = target.checked;
-  const stock = byId<HTMLInputElement>(`variant-stock-${tallaId}`);
-  const minStock = byId<HTMLInputElement>(`variant-min-stock-${tallaId}`);
-  if (stock) stock.disabled = !enabled;
-  if (minStock) minStock.disabled = !enabled;
 });
+byId("product-sizes")?.addEventListener("change", () =>
+  renderProductVariantFields(),
+);
+byId("product-colors")?.addEventListener("change", () =>
+  renderProductVariantFields(),
+);
 
 byId("talla-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget as HTMLFormElement;
-  const nombre = String(new FormData(form).get("name") ?? "").trim();
+  const data = new FormData(form);
+  const tallaId = Number(data.get("sizeId")) || null;
+  const nombre = String(data.get("name") ?? "").trim();
   if (!nombre) return;
+  const submitButton = byId<HTMLButtonElement>("save-size-button");
+  if (submitButton) submitButton.disabled = true;
   try {
-    await inventoryRequest("/tallas", {
-      method: "POST",
+    await inventoryRequest(tallaId ? `/tallas/${tallaId}` : "/tallas", {
+      method: tallaId ? "PATCH" : "POST",
       body: JSON.stringify({ nombre }),
     });
-    form.reset();
     await loadDashboardData();
-    notify(`Talla ${nombre} agregada.`);
+    resetSizeForm();
+    notify(tallaId ? "Talla actualizada." : `Talla ${nombre} agregada.`);
   } catch (cause) {
-    notify(cause instanceof Error ? cause.message : "No se pudo crear la talla.");
+    notify(
+      cause instanceof Error ? cause.message : "No se pudo guardar la talla.",
+    );
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 });
+
+byId("color-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget as HTMLFormElement;
+  const data = new FormData(form);
+  const colorId = Number(data.get("colorId")) || null;
+  const nombre = String(data.get("name") ?? "").trim();
+  if (!nombre) return;
+  const submitButton = byId<HTMLButtonElement>("save-color-button");
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await inventoryRequest(colorId ? `/colores/${colorId}` : "/colores", {
+      method: colorId ? "PATCH" : "POST",
+      body: JSON.stringify({ nombre }),
+    });
+    await loadDashboardData();
+    resetColorForm();
+    notify(colorId ? "Color actualizado." : `Color ${nombre} agregado.`);
+  } catch (cause) {
+    notify(
+      cause instanceof Error ? cause.message : "No se pudo guardar el color.",
+    );
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+});
+
+byId("cancel-size-edit")?.addEventListener("click", resetSizeForm);
+byId("cancel-color-edit")?.addEventListener("click", resetColorForm);
 
 byId("product-search")?.addEventListener("input", renderProducts);
 byId("category-filter")?.addEventListener("change", renderProducts);
 byId("pos-search")?.addEventListener("input", renderPos);
 byId("payment-method")?.addEventListener("change", renderCart);
+byId("sale-discount")?.addEventListener("input", renderCart);
 byId("initial-payment-amount")?.addEventListener("input", renderCart);
 byId("customer-search")?.addEventListener("input", (event) => {
   renderCustomerResults((event.currentTarget as HTMLInputElement).value);
@@ -2283,6 +2708,76 @@ document.addEventListener("click", async (event) => {
   const closeButton = target.closest<HTMLElement>("[data-close]");
   if (closeButton) {
     byId<HTMLDialogElement>(closeButton.dataset.close ?? "")?.close();
+    return;
+  }
+  const editSize = target.closest<HTMLElement>("[data-size-edit]");
+  if (editSize) {
+    const size = tallas.find(
+      (item) => item.id === Number(editSize.dataset.sizeEdit),
+    );
+    if (!size) return;
+    (byId<HTMLFormElement>("talla-form")!.elements.namedItem(
+      "sizeId",
+    ) as HTMLInputElement).value = String(size.id);
+    byId<HTMLInputElement>("size-name")!.value = size.nombre;
+    byId("size-form-label")!.textContent = "Editar talla";
+    byId("save-size-button")!.textContent = "Guardar cambios";
+    byId("cancel-size-edit")?.classList.remove("hidden");
+    return;
+  }
+  const deleteSize = target.closest<HTMLElement>("[data-size-delete]");
+  if (deleteSize) {
+    const size = tallas.find(
+      (item) => item.id === Number(deleteSize.dataset.sizeDelete),
+    );
+    if (!size || !window.confirm(`¿Eliminar la talla "${size.nombre}"?`)) {
+      return;
+    }
+    try {
+      await inventoryRequest(`/tallas/${size.id}`, { method: "DELETE" });
+      resetSizeForm();
+      await loadDashboardData();
+      notify("Talla eliminada.");
+    } catch (cause) {
+      notify(
+        cause instanceof Error ? cause.message : "No se pudo eliminar la talla.",
+      );
+    }
+    return;
+  }
+  const editColor = target.closest<HTMLElement>("[data-color-edit]");
+  if (editColor) {
+    const color = colors.find(
+      (item) => item.id === Number(editColor.dataset.colorEdit),
+    );
+    if (!color) return;
+    (byId<HTMLFormElement>("color-form")!.elements.namedItem(
+      "colorId",
+    ) as HTMLInputElement).value = String(color.id);
+    byId<HTMLInputElement>("color-name")!.value = color.nombre;
+    byId("color-form-label")!.textContent = "Editar color";
+    byId("save-color-button")!.textContent = "Guardar cambios";
+    byId("cancel-color-edit")?.classList.remove("hidden");
+    return;
+  }
+  const deleteColor = target.closest<HTMLElement>("[data-color-delete]");
+  if (deleteColor) {
+    const color = colors.find(
+      (item) => item.id === Number(deleteColor.dataset.colorDelete),
+    );
+    if (!color || !window.confirm(`¿Eliminar el color "${color.nombre}"?`)) {
+      return;
+    }
+    try {
+      await inventoryRequest(`/colores/${color.id}`, { method: "DELETE" });
+      resetColorForm();
+      await loadDashboardData();
+      notify("Color eliminado.");
+    } catch (cause) {
+      notify(
+        cause instanceof Error ? cause.message : "No se pudo eliminar el color.",
+      );
+    }
     return;
   }
   const customerOption = target.closest<HTMLElement>("[data-customer-select]");
@@ -2579,7 +3074,9 @@ document.addEventListener("click", async (event) => {
       snapshot.variants.push({
         id: item.variantId,
         tallaId: 0,
+        colorId: null,
         size: item.size,
+        color: null,
         sku: "HISTORICO",
         barcode: "",
         stock: 0,
@@ -2597,6 +3094,8 @@ document.addEventListener("click", async (event) => {
     renderCustomers(sale.customerId);
     const payment = byId<HTMLSelectElement>("payment-method");
     if (payment) payment.value = sale.payment;
+    const discount = byId<HTMLInputElement>("sale-discount");
+    if (discount) discount.value = String(sale.discountPercentage ?? 0);
     renderCart();
     switchView("pos", `Editar ${sale.id}`);
     return;
@@ -2672,6 +3171,7 @@ byId("cancel-edit-sale")?.addEventListener("click", () => {
   editingSaleId = null;
   editedProductSnapshots.clear();
   cart.clear();
+  byId<HTMLInputElement>("sale-discount")!.value = "0";
   renderCustomers();
   switchView("pos");
 });
@@ -2723,6 +3223,7 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
       body: JSON.stringify({
         clienteId: pendingSale.customerId,
         metodoPago: pendingSale.payment,
+        descuentoPorcentaje: pendingSale.discountPercentage,
         ...(pendingSale.payment === "Crédito"
           ? {
               abonoInicial: pendingSale.paid ?? 0,
@@ -2759,6 +3260,7 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
   editingSaleId = null;
   editedProductSnapshots.clear();
   cart.clear();
+  byId<HTMLInputElement>("sale-discount")!.value = "0";
   byId<HTMLDialogElement>("sale-confirm-modal")?.close();
   try {
     await loadDashboardData();
@@ -2807,18 +3309,35 @@ byId("complete-sale")?.addEventListener("click", () => {
     items.push({
       productId: item.product.id,
       variantId: item.variant.id,
-      size: item.variant.size,
+      size: variantLabel(item.variant),
       name: item.product.name,
       presentation,
       unitsPerPresentation,
       quantity,
-      price: presentationPrice(item.product, presentation),
+      price: presentationPrice(
+        item.product,
+        presentation,
+        item.variant,
+      ),
     });
   }
-  const total = Math.round(items.reduce(
+  const subtotal = Math.round(items.reduce(
     (sum, item) => sum + item.quantity * item.price,
     0,
   ) * 100) / 100;
+  const discountPercentage = Number(
+    byId<HTMLInputElement>("sale-discount")?.value ?? 0,
+  );
+  if (
+    !Number.isFinite(discountPercentage) ||
+    discountPercentage < 0 ||
+    discountPercentage > 100
+  ) {
+    notify("El descuento debe estar entre 0% y 100%.");
+    return;
+  }
+  const discountAmount = Math.round(subtotal * discountPercentage) / 100;
+  const total = Math.round((subtotal - discountAmount) * 100) / 100;
   const payment = byId<HTMLSelectElement>("payment-method")?.value ?? "Efectivo";
   const initialPayment =
     payment === "Crédito"
@@ -2844,6 +3363,9 @@ byId("complete-sale")?.addEventListener("click", () => {
     customerPhone: customer.phone,
     items,
     payment,
+    subtotal,
+    discountPercentage,
+    discountAmount,
     total,
     paid: initialPayment,
     debt: payment === "Crédito" ? total - initialPayment : 0,

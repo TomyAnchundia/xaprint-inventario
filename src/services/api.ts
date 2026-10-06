@@ -7,11 +7,40 @@ export interface InventoryUser {
 const apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
 const tokenKey = "xaprint-inventario-token";
 let pendingRequests = 0;
+let requestStatusDialog: HTMLDialogElement | null = null;
 
 function updateRequestStatus(delta: number): void {
   pendingRequests = Math.max(0, pendingRequests + delta);
   const status = document.getElementById("request-status");
-  if (status) status.hidden = pendingRequests === 0;
+  if (!status) return;
+  if (pendingRequests > 0) {
+    if (pendingRequests === 1) {
+      requestStatusDialog = document.querySelector<HTMLDialogElement>(
+        "dialog[open]",
+      );
+      if (requestStatusDialog) {
+        const dialog = requestStatusDialog;
+        dialog.append(status);
+        status.classList.add("request-status--modal");
+        dialog.addEventListener(
+          "close",
+          () => {
+            if (requestStatusDialog !== dialog) return;
+            document.body.append(status);
+            status.classList.remove("request-status--modal");
+            requestStatusDialog = null;
+          },
+          { once: true },
+        );
+      }
+    }
+    status.hidden = false;
+  } else {
+    status.hidden = true;
+    document.body.append(status);
+    status.classList.remove("request-status--modal");
+    requestStatusDialog = null;
+  }
 }
 
 export function getInventoryToken(): string | null {

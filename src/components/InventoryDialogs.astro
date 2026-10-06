@@ -1,20 +1,49 @@
 <dialog id="product-modal" class="modal-card w-[min(560px,calc(100%-2rem))]">
   <form id="product-form" method="dialog">
-    <div class="modal-heading"><div><h2 id="product-modal-title" class="text-lg font-bold">Nuevo producto</h2><p class="mt-1 text-xs text-slate-500">Cada talla tendrá su propio stock y código de barras.</p></div><button type="button" class="modal-close" data-close="product-modal" aria-label="Cerrar">✕</button></div>
+    <div class="modal-heading"><div><h2 id="product-modal-title" class="text-lg font-bold">Nuevo producto</h2><p class="mt-1 text-xs text-slate-500">Cada variante tendrá su propio stock y código de barras.</p></div><button type="button" class="modal-close" data-close="product-modal" aria-label="Cerrar">✕</button></div>
     <div class="grid gap-4 p-5 sm:grid-cols-2">
       <input name="productId" type="hidden" />
       <label class="form-label sm:col-span-2">Nombre del producto<input class="form-input" name="name" required maxlength="80" placeholder="Ej. Camiseta clásica" /></label>
       <label class="form-label">SKU automático<input id="product-sku-display" class="form-input bg-slate-50 font-mono" value="Se asignará al guardar" readonly /></label>
       <label class="form-label">Categoría<select id="product-category" class="form-input" name="categoryId" required></select></label>
-      <label class="form-label">Precio ($)<input class="form-input" name="price" type="number" min="0.01" step="0.01" required placeholder="12.50" /></label>
-      <label class="form-label">Unidades por caja (opcional)<input class="form-input" name="unitsPerBox" type="number" min="2" step="1" placeholder="36" /></label>
-      <label class="form-label">Precio de caja ($)<input class="form-input" name="boxPrice" type="number" min="0.01" step="0.01" placeholder="33.00" /></label>
+      <label class="form-label">Precio base ($)<input id="product-price" class="form-input" name="price" type="number" min="0.01" step="0.01" required placeholder="12.50" /></label>
+      <fieldset id="box-options" class="hidden sm:col-span-2">
+        <legend class="form-label mb-2">Venta por caja</legend>
+        <label class="flex items-center gap-2 text-xs font-medium text-slate-600"><input id="product-sells-by-box" type="checkbox" class="accent-[#287052]" />Permitir vender este producto por caja</label>
+        <div id="box-price-fields" class="mt-3 grid gap-4 sm:grid-cols-2" hidden>
+          <label class="form-label">Unidades por caja<input class="form-input" name="unitsPerBox" type="number" min="2" step="1" placeholder="36" /></label>
+          <label class="form-label">Precio de caja ($)<input class="form-input" name="boxPrice" type="number" min="0.01" step="0.01" placeholder="33.00" /></label>
+        </div>
+      </fieldset>
+      <fieldset id="size-options" class="hidden sm:col-span-2">
+        <legend class="form-label mb-2">Tallas</legend>
+        <div id="product-sizes" class="flex flex-wrap gap-3"></div>
+        <div id="product-size-prices" class="mt-3 grid gap-3 sm:grid-cols-2"></div>
+      </fieldset>
+      <fieldset id="color-options" class="hidden sm:col-span-2">
+        <legend class="form-label mb-2">Colores (opcional)</legend>
+        <div id="product-colors" class="flex flex-wrap gap-3"></div>
+      </fieldset>
       <fieldset class="sm:col-span-2">
-        <legend class="form-label mb-2">Tallas y existencias iniciales</legend>
-        <div id="product-variants" class="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#edf0ec] p-3"></div>
+        <legend id="product-variants-label" class="form-label mb-2">Variantes y existencias iniciales</legend>
+        <p class="mb-2 text-xs text-slate-500">Configura el precio de cada talla. Cada combinación de talla y color tendrá su propio stock y mínimo.</p>
+        <div id="product-variants" class="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#edf0ec] p-3"><p class="text-xs text-slate-400">Configura tallas o colores para administrar sus existencias.</p></div>
       </fieldset>
     </div>
     <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="product-modal">Cancelar</button><button id="save-product-button" type="submit" class="primary-button">Guardar producto</button></div>
+  </form>
+</dialog>
+
+<dialog id="colores-modal" class="modal-card w-[min(430px,calc(100%-2rem))]">
+  <form id="color-form" method="dialog">
+    <div class="modal-heading"><div><h2 class="text-lg font-bold">Administrar colores</h2><p class="mt-1 text-xs text-slate-500">Cada variante de color tendrá stock y código de barras propios.</p></div><button type="button" class="modal-close" data-close="colores-modal" aria-label="Cerrar">✕</button></div>
+    <div class="space-y-4 p-5">
+      <input name="colorId" type="hidden" />
+      <label class="form-label"><span id="color-form-label">Nuevo color</span><div class="mt-1 flex gap-2"><input id="color-name" class="form-input" name="name" required maxlength="30" placeholder="Ej. Azul marino" /><button id="save-color-button" type="submit" class="primary-button">Agregar</button></div></label>
+      <button id="cancel-color-edit" type="button" class="secondary-button hidden">Cancelar edición</button>
+      <div><h3 class="mb-2 text-xs font-semibold text-slate-600">Colores disponibles</h3><ul id="colores-list" class="space-y-1"></ul></div>
+    </div>
+    <div class="flex justify-end border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="colores-modal">Cerrar</button></div>
   </form>
 </dialog>
 
@@ -44,7 +73,9 @@
   <form id="talla-form" method="dialog">
     <div class="modal-heading"><div><h2 class="text-lg font-bold">Administrar tallas</h2><p class="mt-1 text-xs text-slate-500">Las tallas se podrán reutilizar en distintos productos.</p></div><button type="button" class="modal-close" data-close="tallas-modal" aria-label="Cerrar">✕</button></div>
     <div class="space-y-4 p-5">
-      <label class="form-label">Nueva talla<div class="mt-1 flex gap-2"><input class="form-input" name="name" required maxlength="20" placeholder="Ej. XXL o 35" /><button type="submit" class="primary-button">Agregar</button></div></label>
+      <input name="sizeId" type="hidden" />
+      <label class="form-label"><span id="size-form-label">Nueva talla</span><div class="mt-1 flex gap-2"><input id="size-name" class="form-input" name="name" required maxlength="20" placeholder="Ej. XXL o 35" /><button id="save-size-button" type="submit" class="primary-button">Agregar</button></div></label>
+      <button id="cancel-size-edit" type="button" class="secondary-button hidden">Cancelar edición</button>
       <div><h3 class="mb-2 text-xs font-semibold text-slate-600">Tallas disponibles</h3><ul id="tallas-list" class="space-y-1"></ul></div>
     </div>
     <div class="flex justify-end border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="tallas-modal">Cerrar</button></div>

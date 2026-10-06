@@ -3,6 +3,7 @@
     <div><p class="text-sm text-slate-500">Administra tu catálogo y niveles de stock</p><h2 class="mt-1 text-2xl font-bold tracking-tight">Catálogo de productos</h2></div>
     <div class="flex gap-2">
       <button id="open-tallas-modal" type="button" class="secondary-button">Administrar tallas</button>
+      <button id="open-colores-modal" type="button" class="secondary-button">Administrar colores</button>
       <button id="open-product-modal" class="primary-button"><span class="text-lg leading-none">＋</span> Agregar producto</button>
     </div>
   </div>
@@ -14,9 +15,9 @@
       </label>
       <select id="category-filter" class="select-input sm:w-44" aria-label="Filtrar por categoría"><option value="">Todas las categorías</option></select>
     </div>
-    <div class="overflow-x-auto">
+    <div class="products-scroll-region">
       <table class="data-table">
-        <thead><tr><th>Producto</th><th>SKU</th><th>Tallas / códigos</th><th>Categoría</th><th>Precio</th><th>Stock total</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>Producto</th><th>SKU</th><th>Variantes / códigos</th><th>Categoría</th><th>Precio</th><th>Stock total</th><th>Estado</th><th></th></tr></thead>
         <tbody id="products-table"></tbody>
       </table>
     </div>

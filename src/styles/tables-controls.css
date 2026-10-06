@@ -5,6 +5,17 @@
   white-space: nowrap;
 }
 
+.products-scroll-region {
+  max-height: min(65vh, 720px);
+  overflow: auto;
+}
+
+.products-scroll-region .data-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 .data-table th {
   border-top: 1px solid #f0f2ef;
   border-bottom: 1px solid #edf0ec;
@@ -59,4 +70,3 @@
   border-color: #76ae8c;
   box-shadow: 0 0 0 3px rgb(69 142 98 / 10%);
 }
-

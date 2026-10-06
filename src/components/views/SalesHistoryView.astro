@@ -1,7 +1,7 @@
 <section id="view-sales" class="app-view hidden space-y-6">
   <div><p class="text-sm text-slate-500">Filtra, revisa y exporta las transacciones de tu negocio</p><h2 class="mt-1 text-2xl font-bold tracking-tight">Historial de ventas</h2></div>
   <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-    <article class="metric-card compact-metric"><span class="metric-label">Total vendido</span><p id="history-total" class="metric-value">$0.00</p><p class="metric-note">Suma de ventas del período</p></article>
+    <article class="metric-card compact-metric"><span class="metric-label">Total vendido</span><p id="history-total" class="metric-value">$0.00</p><p class="metric-note">Neto tras aplicar descuentos</p></article>
     <article class="metric-card compact-metric"><span class="metric-label">Transacciones</span><p id="history-count" class="metric-value">0</p><p class="metric-note">Ventas registradas</p></article>
     <article class="metric-card compact-metric"><span class="metric-label">Ticket promedio</span><p id="history-average" class="metric-value">$0.00</p><p class="metric-note">Venta media por transacción</p></article>
     <article class="metric-card compact-metric"><span class="metric-label">Unidades vendidas</span><p id="history-units" class="metric-value">0</p><p class="metric-note">Artículos incluidos en ventas</p></article>
@@ -29,5 +29,5 @@
     </div>
     <p id="sales-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">No hay ventas para los filtros seleccionados.</p>
   </article>
-  <p class="text-[11px] text-slate-400">Los indicadores muestran el total bruto vendido; no incluyen costos ni representan utilidad neta.</p>
+  <p class="text-[11px] text-slate-400">Los indicadores muestran el total neto después de descuentos; no incluyen costos ni representan utilidad neta.</p>
 </section>

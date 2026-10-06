@@ -86,6 +86,7 @@
 
 .options-menu {
   position: absolute;
+  top: calc(100% + 4px);
   right: 0;
   z-index: 5;
   display: grid;
@@ -96,6 +97,11 @@
   padding: 5px;
   background: white;
   box-shadow: 0 10px 24px rgb(23 61 50 / 12%);
+}
+
+#products-table tr:last-child .product-options[open] .options-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .options-menu button {
@@ -132,6 +138,27 @@
 
 .request-status[hidden] {
   display: none;
+}
+
+.request-status--modal {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  justify-content: center;
+  border: 0;
+  border-radius: inherit;
+  background: rgb(255 255 255 / 82%);
+  box-shadow: none;
+  transform: none;
+}
+
+.modal-toast {
+  position: absolute !important;
+  z-index: 30 !important;
+  top: 16px !important;
+  right: 16px !important;
+  left: auto !important;
+  transform: translateY(0) !important;
 }
 
 .request-spinner {
