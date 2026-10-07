@@ -11,7 +11,7 @@
 
 .product-tile:hover {
   transform: translateY(-1px);
-  border-color: #b9d7c4;
+  border-color: #bfdbfe;
   box-shadow: 0 6px 18px rgb(23 61 50 / 6%);
 }
 
@@ -27,9 +27,9 @@
 }
 
 .category-chip.is-selected {
-  border-color: #1d5d43;
+  border-color: #1d4ed8;
   color: white;
-  background: #1d5d43;
+  background: #1d4ed8;
 }
 
 .qty-button {
@@ -46,8 +46,8 @@
 }
 
 .qty-button:hover:not(:disabled) {
-  border-color: #bdd9c6;
-  color: #1d5d43;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
 }
 
 .qty-button:disabled {
@@ -129,7 +129,7 @@
 }
 
 .customer-result:hover {
-  background: #f4f8f4;
+  background: #f1f5f9;
 }
 
 .customer-result span {

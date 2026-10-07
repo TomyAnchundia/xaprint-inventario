@@ -9,7 +9,15 @@
   <article class="panel-card overflow-hidden">
     <div class="space-y-4 border-b border-[#edf0ec] p-4 sm:p-5">
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_170px_170px_180px_auto]">
-        <label class="relative block"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span><input id="history-search" class="search-input pl-9" type="search" placeholder="Cliente, producto o n.º de venta..." /></label>
+        <label class="search-field">
+          <span class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="10.8" cy="10.8" r="6.8"></circle>
+              <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
+            </svg>
+          </span>
+          <input id="history-search" class="search-input" type="search" aria-label="Buscar ventas" placeholder="Cliente, producto o n.º de venta..." />
+        </label>
         <label class="filter-label">Desde<input id="history-date-from" class="select-input mt-1" type="date" /></label>
         <label class="filter-label">Hasta<input id="history-date-to" class="select-input mt-1" type="date" /></label>
         <label class="filter-label">Método de pago<select id="history-payment" class="select-input mt-1"><option value="">Todos</option><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option><option value="Crédito">Crédito</option></select></label>

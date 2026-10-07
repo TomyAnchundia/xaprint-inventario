@@ -80,8 +80,8 @@
 
 .options-trigger:hover,
 .product-options[open] .options-trigger {
-  color: #1d5d43;
-  background: #edf6ef;
+  color: #1d4ed8;
+  background: #dbeafe;
 }
 
 .options-menu {
@@ -164,8 +164,8 @@
 .request-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #d8e5da;
-  border-top-color: #1d5d43;
+  border: 2px solid #dbeafe;
+  border-top-color: #1d4ed8;
   border-radius: 50%;
   animation: request-spin 700ms linear infinite;
 }

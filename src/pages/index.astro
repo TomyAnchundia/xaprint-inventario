@@ -17,9 +17,9 @@ import CustomersView from "../components/views/CustomersView.astro";
 <Layout>
   <main id="login-screen" class="min-h-screen bg-slate-50">
     <div class="grid min-h-screen lg:grid-cols-2">
-      <section class="relative hidden flex-col justify-between overflow-hidden bg-slate-900 p-10 text-white lg:flex">
+      <section class="relative hidden flex-col justify-between overflow-hidden bg-gray-900 p-10 text-white lg:flex">
         <div class="flex items-center gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c8ed76] text-lg font-black text-[#173d32]">X</div>
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-700 text-lg font-black text-white">X</div>
           <div>
             <p class="font-semibold">Xaprint</p>
             <p class="text-xs text-slate-400">Control de inventario</p>
@@ -50,7 +50,7 @@ import CustomersView from "../components/views/CustomersView.astro";
           </div>
           <div class="mb-8 lg:hidden">
             <div class="flex items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-lg font-black text-[#c8ed76]">X</div>
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-700 text-lg font-black text-white">X</div>
               <div>
                 <p class="font-semibold text-slate-900">Xaprint</p>
                 <p class="text-xs text-slate-500">Control de inventario</p>
@@ -71,7 +71,7 @@ import CustomersView from "../components/views/CustomersView.astro";
               <input name="password" type="password" autocomplete="current-password" required maxlength="128" placeholder="Ingresa tu contraseña" class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200" />
             </label>
             <p id="login-error" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert"></p>
-            <button id="login-submit" type="submit" class="flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:cursor-not-allowed disabled:opacity-60">Iniciar sesión</button>
+            <button id="login-submit" type="submit" class="flex w-full items-center justify-center rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:cursor-not-allowed disabled:opacity-60">Iniciar sesión</button>
           </form>
         </div>
       </section>

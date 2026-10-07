@@ -34,6 +34,7 @@ interface ProductVariant {
   color: string | null;
   sku: string;
   barcode: string;
+  legacyBarcode?: string;
   stock: number;
   minStock: number;
   price?: number;
@@ -626,7 +627,7 @@ function renderTallas(): void {
   list.innerHTML = tallas
     .map(
       (talla) =>
-        `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(talla.nombre)}${talla.nombre === "Única" ? ' <small class="text-slate-400">(sistema)</small>' : ""}</span>${talla.nombre === "Única" ? "" : `<span class="flex gap-3"><button type="button" class="text-xs font-semibold text-[#287052]" data-size-edit="${talla.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-size-delete="${talla.id}">Eliminar</button></span>`}</li>`,
+        `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(talla.nombre)}${talla.nombre === "Única" ? ' <small class="text-slate-400">(sistema)</small>' : ""}</span>${talla.nombre === "Única" ? "" : `<span class="flex gap-3"><button type="button" class="text-xs font-semibold text-blue-700" data-size-edit="${talla.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-size-delete="${talla.id}">Eliminar</button></span>`}</li>`,
     )
     .join("");
 }
@@ -637,7 +638,7 @@ function renderColores(): void {
     list.innerHTML = colors
       .map(
         (color) =>
-          `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(color.nombre)}</span><span class="flex gap-3"><button type="button" class="text-xs font-semibold text-[#287052]" data-color-edit="${color.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-color-delete="${color.id}">Eliminar</button></span></li>`,
+          `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(color.nombre)}</span><span class="flex gap-3"><button type="button" class="text-xs font-semibold text-blue-700" data-color-edit="${color.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-color-delete="${color.id}">Eliminar</button></span></li>`,
       )
       .join("") || '<li class="text-xs text-slate-400">Todavía no hay colores.</li>';
   }
@@ -796,7 +797,7 @@ function renderProductVariantFields(
       .filter((talla) => talla.nombre !== "Única")
       .map(
         (talla) =>
-          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-[#287052]" data-size-option="${talla.id}" ${chosenSizes.has(talla.id) ? "checked" : ""} />${escapeHtml(talla.nombre)}</label>`,
+          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-blue-700" data-size-option="${talla.id}" ${chosenSizes.has(talla.id) ? "checked" : ""} />${escapeHtml(talla.nombre)}</label>`,
       )
       .join("") || '<span class="text-xs text-slate-400">Agrega tallas antes de crear una prenda.</span>';
   }
@@ -821,10 +822,10 @@ function renderProductVariantFields(
     const colorOptions = colors
       .map(
         (color) =>
-          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-[#287052]" data-color-option="${color.id}" ${selectedColorIds.includes(color.id) ? "checked" : ""} />${escapeHtml(color.nombre)}</label>`,
+          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-blue-700" data-color-option="${color.id}" ${selectedColorIds.includes(color.id) ? "checked" : ""} />${escapeHtml(color.nombre)}</label>`,
       )
       .join("");
-    colorsContainer.innerHTML = `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-[#287052]" data-color-option="none" ${noColorSelected ? "checked" : ""} />Sin color</label>${colorOptions || '<span class="text-xs text-slate-400">Agrega colores en “Administrar colores”.</span>'}`;
+    colorsContainer.innerHTML = `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-blue-700" data-color-option="none" ${noColorSelected ? "checked" : ""} />Sin color</label>${colorOptions || '<span class="text-xs text-slate-400">Agrega colores en “Administrar colores”.</span>'}`;
   }
 
   const activeSizeIds = isGarment
@@ -873,7 +874,7 @@ function renderCategories(): void {
         <td class="font-semibold text-slate-700">${escapeHtml(category.nombre)}</td>
         <td class="text-right">
           <div class="flex justify-end gap-2">
-            <button type="button" class="text-xs font-semibold text-[#287052] hover:underline" data-category-edit="${category.id}">Editar</button>
+            <button type="button" class="text-xs font-semibold text-blue-700 hover:underline" data-category-edit="${category.id}">Editar</button>
             <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-category-delete="${category.id}">Eliminar</button>
           </div>
         </td>
@@ -902,7 +903,7 @@ function renderInventoryUsers(): void {
         <td class="text-xs text-slate-500">${Number.isNaN(created.getTime()) ? "—" : shortDate.format(created)}</td>
         <td class="text-right">
           <div class="flex justify-end gap-2">
-            <button type="button" class="text-xs font-semibold text-[#287052] hover:underline" data-user-edit="${user.id}">Editar</button>
+            <button type="button" class="text-xs font-semibold text-blue-700 hover:underline" data-user-edit="${user.id}">Editar</button>
             ${
               isCurrentUser
                 ? '<span class="px-1 text-xs text-slate-300" title="No puedes eliminar tu propia sesión">Eliminar</span>'
@@ -946,8 +947,8 @@ function renderCustomersTable(): void {
           <td class="font-semibold ${customer.saldoDeuda > 0 ? "text-rose-700" : "text-slate-400"}">${currency.format(customer.saldoDeuda)}</td>
           <td class="text-right">
            <div class="flex justify-end gap-2">
-             <button type="button" class="text-xs font-semibold ${customer.saldoDeuda > 0 ? "text-rose-700" : "text-[#287052]"} hover:underline" data-customer-account="${customer.id}">Cuenta</button>
-             <button type="button" class="text-xs font-semibold text-[#287052] hover:underline" data-customer-edit="${customer.id}">Editar</button>
+             <button type="button" class="text-xs font-semibold ${customer.saldoDeuda > 0 ? "text-rose-700" : "text-blue-700"} hover:underline" data-customer-account="${customer.id}">Cuenta</button>
+             <button type="button" class="text-xs font-semibold text-blue-700 hover:underline" data-customer-edit="${customer.id}">Editar</button>
               <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" data-customer-delete="${customer.id}">Eliminar</button>
             </div>
           </td>
@@ -1159,7 +1160,7 @@ function renderProducts(): void {
   const filtered = [...products, ...editedProductSnapshots.values()].filter(
     (product) =>
       `${product.name} ${product.sku} ${product.barcode} ${product.variants
-        .map((variant) => `${variantLabel(variant)} ${variant.sku} ${variant.barcode}`)
+        .map((variant) => `${variantLabel(variant)} ${variant.sku} ${variant.barcode} ${variant.legacyBarcode ?? ""}`)
         .join(" ")}`
         .toLowerCase()
         .includes(search) &&
@@ -1182,8 +1183,8 @@ function renderProducts(): void {
         .map(
           (variant) => `<span class="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[10px]">
             <span class="font-semibold text-slate-600">${escapeHtml(variantLabel(variant))} · ${variant.stock}</span>
-            <button class="font-mono text-[#287052] hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variantLabel(variant))}">${escapeHtml(variant.barcode)}</button>
-            <button class="font-bold text-[#287052]" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variantLabel(variant))}">＋</button>
+            <button class="font-mono text-blue-700 hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variantLabel(variant))}">${escapeHtml(variant.barcode)}</button>
+            <button class="font-bold text-blue-700" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variantLabel(variant))}">＋</button>
           </span>`,
         )
         .join("")}</div></td>
@@ -1253,7 +1254,7 @@ function renderPos(): void {
       </div>
       <div class="mt-3 flex items-start justify-between gap-2">
         <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">${escapeHtml(variantLabel(variant))} · ${availableForSale(variant, editedSale)} disponibles</p></div>
-        <span class="shrink-0 text-right text-xs font-bold text-[#1e6047]">${currency.format(variant.price ?? product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
+        <span class="shrink-0 text-right text-xs font-bold text-blue-700">${currency.format(variant.price ?? product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
       </div>
     </button>
   `,
@@ -1336,23 +1337,30 @@ function renderCart(): void {
             item.variant,
           );
           return `
-    <div class="flex items-center gap-3 py-4">
-      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${item.product.tone} text-[10px] font-bold">${escapeHtml(variantLabel(item.variant))}</div>
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(item.product.name)} · ${escapeHtml(variantLabel(item.variant))}</p>
-        ${item.product.unitsPerBox && item.product.boxPrice ? `<select class="form-input mt-1 h-7 max-w-28 px-2 text-[10px]" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad · ${currency.format(item.product.price)}</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox}) · ${currency.format(item.product.boxPrice)}</option></select>` : `<p class="mt-1 text-[10px] text-slate-400">${currency.format(linePrice)} / unidad</p>`}
+    <div class="space-y-2.5 py-3.5">
+      <div class="min-w-0">
+        <p class="break-words text-xs font-semibold leading-4 text-slate-700">${escapeHtml(item.product.name)}</p>
+        <p class="mt-0.5 text-[10px] text-slate-500">${escapeHtml(variantLabel(item.variant))}</p>
       </div>
-      <div class="flex items-center gap-1.5">
-        <button class="qty-button" data-cart-change="${key}" data-delta="-1" aria-label="Quitar uno">−</button>
-        <input class="form-input h-8 w-14 px-1 text-center text-xs" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" />
-        <button class="qty-button" data-cart-change="${key}" data-delta="1" aria-label="Agregar uno" ${quantity >= maximum ? "disabled" : ""}>＋</button>
+      <div class="flex min-w-0 items-center justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          ${item.product.unitsPerBox && item.product.boxPrice ? `<label class="block text-[9px] font-medium text-slate-400">Presentación<select class="form-input mt-0.5 h-7 w-full max-w-40 px-2 text-[10px]" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox})</option></select></label>` : ""}
+        </div>
+        <div class="flex shrink-0 items-center gap-1.5">
+          <label class="text-[10px] text-slate-500" for="cart-quantity-${key}">Cantidad</label>
+          <input id="cart-quantity-${key}" class="form-input h-7 w-14 px-1 text-center text-xs" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" />
+        </div>
       </div>
-      <strong class="shrink-0 text-xs">${currency.format(linePrice * quantity)}</strong>
+      <div class="flex items-center justify-between border-t border-slate-100 pt-2">
+        <span class="text-[10px] text-slate-400">${currency.format(linePrice)} c/u</span>
+        <strong class="text-xs font-bold text-slate-700">${currency.format(linePrice * quantity)}</strong>
+      </div>
     </div>`;
         },
       )
       .join("");
   byId("cart-count")!.textContent = String(itemCount);
+  byId("cart-peek-total")!.textContent = currency.format(total);
   byId("cart-subtotal")!.textContent = currency.format(subtotal);
   byId("cart-discount-row")?.classList.toggle(
     "hidden",
@@ -1523,7 +1531,7 @@ function renderSales(): void {
       .map(
         (sale) => `
     <tr>
-      <td class="font-mono text-xs font-semibold text-[#287052]">${escapeHtml(sale.id)}</td>
+      <td class="font-mono text-xs font-semibold text-blue-700">${escapeHtml(sale.id)}</td>
       <td class="font-medium text-slate-700">${escapeHtml(sale.customerName)}</td>
       <td class="text-xs text-slate-500">${dateTime.format(sale.date)}</td>
       <td class="text-slate-600">${sale.items.reduce((sum, item) => sum + item.quantity, 0)} artículos</td>
@@ -1789,7 +1797,7 @@ function showSaleConfirmation(sale: Sale): void {
         <div class="space-y-2 border-t border-[#edf0ec] bg-[#fafbf9] px-4 py-4">
           <div class="flex items-center justify-between text-xs text-slate-500"><span>Subtotal</span><span>${currency.format(sale.subtotal)}</span></div>
           ${sale.discountPercentage > 0 ? `<div class="flex items-center justify-between text-xs font-semibold text-rose-600"><span>Descuento (${sale.discountPercentage}%)</span><span>−${currency.format(sale.discountAmount)}</span></div>` : ""}
-          <div class="flex items-center justify-between"><span class="text-sm font-bold text-slate-600">Total</span><strong class="text-lg font-bold text-[#1d5d43]">${currency.format(sale.total)}</strong></div>
+          <div class="flex items-center justify-between"><span class="text-sm font-bold text-slate-600">Total</span><strong class="text-lg font-bold text-blue-700">${currency.format(sale.total)}</strong></div>
           ${credit ? `<div class="flex items-center justify-between text-xs"><span>Abono al entregar · ${escapeHtml(String(sale.paymentMethodInitial ?? "Efectivo"))}</span><strong>${currency.format(sale.paid ?? 0)}</strong></div><div class="flex items-center justify-between text-sm font-bold text-rose-700"><span>Deuda pendiente</span><strong>${currency.format(sale.debt ?? sale.total)}</strong></div>` : ""}
         </div>
       </div>
@@ -2065,7 +2073,7 @@ function showBarcode(product: Product, variant: ProductVariant): void {
       height: 70,
       margin: 8,
       background: "#ffffff",
-      lineColor: "#173d32",
+      lineColor: "#1d4ed8",
     });
   }
   byId("print-barcode")?.addEventListener("click", () => window.print());
@@ -2138,6 +2146,7 @@ function scanBarcode(value: string): void {
     .find(
       ({ variant }) =>
         variant.barcode.toUpperCase() === code ||
+        variant.legacyBarcode?.toUpperCase() === code ||
         variant.sku.toUpperCase() === code,
     );
   if (!item) {
@@ -2150,7 +2159,20 @@ function scanBarcode(value: string): void {
   }
 }
 
+function setMobileCartOpen(open: boolean): void {
+  const cartPanel = byId("sale-cart");
+  const toggle = byId<HTMLButtonElement>("toggle-cart");
+  const backdrop = byId<HTMLButtonElement>("cart-backdrop");
+  if (!cartPanel || !toggle || !backdrop) return;
+
+  cartPanel.classList.toggle("is-open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+  toggle.textContent = open ? "Cerrar carrito" : "Ver carrito";
+  backdrop.hidden = !open;
+}
+
 function switchView(view: string, title?: string): void {
+  if (view !== "pos") setMobileCartOpen(false);
   document.querySelectorAll<HTMLElement>(".app-view").forEach((section) => {
     section.classList.toggle("hidden", section.id !== `view-${view}`);
   });
@@ -2169,6 +2191,7 @@ function switchView(view: string, title?: string): void {
       ? `Editar ${editingSaleId}`
       : "Punto de venta";
   }
+
   byId("cancel-edit-sale")?.classList.toggle("hidden", !editingSaleId);
   closeSidebar();
   if (view === "products") renderProducts();
@@ -3003,28 +3026,6 @@ document.addEventListener("click", async (event) => {
     addProductToCart(Number(addToCart.dataset.cartAdd));
     return;
   }
-  const changeQuantity = target.closest<HTMLElement>("[data-cart-change]");
-  if (changeQuantity) {
-    const key = changeQuantity.dataset.cartChange ?? "";
-    const { variantId, presentation } = parseCartKey(key);
-    const next = (cart.get(key) ?? 0) + Number(changeQuantity.dataset.delta);
-    const item = variantFor(variantId);
-    const maximum = item
-      ? availableForCart(
-          item.variant,
-          presentationUnits(item.product, presentation),
-          key,
-        )
-      : 0;
-    if (next <= 0) cart.delete(key);
-    else if (
-      item &&
-      next <= maximum
-    )
-      cart.set(key, next);
-    renderCart();
-    return;
-  }
   const category = target.closest<HTMLElement>("[data-category]");
   if (category) {
     activeCategory = category.dataset.category ?? "Todas";
@@ -3165,6 +3166,23 @@ byId("cart-items")?.addEventListener("change", (event) => {
 byId("clear-cart")?.addEventListener("click", () => {
   cart.clear();
   renderCart();
+});
+
+byId("toggle-cart")?.addEventListener("click", () => {
+  const open = byId("sale-cart")?.classList.contains("is-open") ?? false;
+  setMobileCartOpen(!open);
+});
+
+byId<HTMLButtonElement>("cart-backdrop")?.addEventListener("click", () => {
+  setMobileCartOpen(false);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setMobileCartOpen(false);
+});
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth >= 1280) setMobileCartOpen(false);
 });
 
 byId("cancel-edit-sale")?.addEventListener("click", () => {

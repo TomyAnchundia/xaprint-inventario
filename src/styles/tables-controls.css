@@ -67,6 +67,6 @@
 .search-input:focus,
 .select-input:focus,
 .form-input:focus {
-  border-color: #76ae8c;
-  box-shadow: 0 0 0 3px rgb(69 142 98 / 10%);
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgb(29 78 216 / 12%);
 }

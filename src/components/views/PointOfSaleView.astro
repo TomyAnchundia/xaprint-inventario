@@ -1,59 +1,229 @@
 <section id="view-pos" class="app-view hidden space-y-6">
-  <div class="flex items-end justify-between gap-4"><div><p class="text-sm text-slate-500">Selecciona productos y prepara el cobro</p><h2 id="pos-title" class="mt-1 text-2xl font-bold tracking-tight">Punto de venta</h2></div><button id="cancel-edit-sale" class="secondary-button hidden" type="button">Cancelar edición</button></div>
-  <div class="grid items-start gap-5 xl:grid-cols-[1fr_380px]">
-    <article class="panel-card overflow-hidden">
+  <div class="flex items-end justify-between gap-4">
+    <div>
+      <p class="text-sm text-slate-500">Selecciona productos y prepara el cobro</p>
+      <h2
+        id="pos-title"
+        class="mt-1 text-2xl font-bold tracking-tight"
+      >
+        Punto de venta
+      </h2>
+    </div>
+    <button
+      id="cancel-edit-sale"
+      class="secondary-button hidden"
+      type="button"
+    >
+      Cancelar edición
+    </button>
+  </div>
+
+  <button
+    id="cart-backdrop"
+    type="button"
+    aria-label="Cerrar carrito"
+    hidden
+  ></button>
+
+  <div class="pos-layout">
+    <article class="panel-card pos-products-panel overflow-hidden">
       <div class="space-y-4 border-b border-[#edf0ec] p-4 sm:p-5">
         <label class="block text-xs font-semibold text-slate-600">
           Escanear código de barras
-          <span class="relative mt-1.5 block"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden="true">▥</span><input id="barcode-input" class="search-input pl-9" type="text" autocomplete="off" placeholder="Escanea el código y presiona Enter" /></span>
+          <span class="search-field mt-1.5">
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path stroke-linecap="round" d="M4 7V5h2m12 0h2v2M4 17v2h2m12 0h2v-2M7 5v14m3-14v14m4-14v14m3-14v14"></path>
+              </svg>
+            </span>
+            <input
+              id="barcode-input"
+              class="search-input"
+              type="text"
+              aria-label="Escanear código de barras"
+              autocomplete="off"
+              placeholder="Escanea el código y presiona Enter"
+            />
+          </span>
         </label>
-        <label class="relative block"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">⌕</span><input id="pos-search" class="search-input pl-9" type="search" placeholder="Buscar productos..." /></label>
+        <label class="search-field">
+          <span class="search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <circle cx="10.8" cy="10.8" r="6.8"></circle>
+              <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
+            </svg>
+          </span>
+          <input
+            id="pos-search"
+            class="search-input"
+            type="search"
+            aria-label="Buscar productos"
+            placeholder="Buscar productos..."
+          />
+        </label>
         <div id="category-chips" class="flex gap-2 overflow-x-auto pb-1"></div>
       </div>
-      <div id="pos-products" class="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3"></div>
-      <p id="pos-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">No hay productos disponibles para esta búsqueda.</p>
-    </article>
-    <aside class="panel-card sticky top-[94px]">
-      <div class="panel-heading">
-        <div><h3 class="panel-title">Venta actual</h3><p class="panel-caption"><span id="cart-count">0</span> artículos</p></div>
-        <button id="clear-cart" class="text-xs font-semibold text-slate-400 hover:text-rose-600">Vaciar</button>
+      <div class="pos-product-list scrollbar-thin">
+        <div id="pos-products" class="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3"></div>
+        <p id="pos-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">
+          No hay productos disponibles para esta búsqueda.
+        </p>
       </div>
-      <div id="cart-items" class="scrollbar-thin max-h-[340px] divide-y divide-[#edf0ec] overflow-y-auto px-5"></div>
-      <div id="cart-empty" class="px-5 pb-5 text-center text-sm text-slate-400">Agrega productos para comenzar.</div>
-      <div class="space-y-3 border-t border-[#edf0ec] bg-[#fafbf9] p-5">
+    </article>
+
+    <aside id="sale-cart" class="panel-card pos-cart">
+      <div class="panel-heading">
         <div>
-          <div class="mb-1.5 flex items-center justify-between gap-2">
-            <label for="customer-search" class="text-xs font-semibold text-slate-600">Cliente <span class="text-rose-600">*</span></label>
-            <button id="open-customer-modal" type="button" class="text-[11px] font-semibold text-[#287052] hover:underline">＋ Nuevo cliente</button>
-          </div>
-          <div id="customer-picker" class="customer-picker">
-            <input id="customer-search" class="search-input w-full" type="search" role="combobox" aria-autocomplete="list" aria-controls="customer-results" aria-expanded="false" placeholder="Buscar por nombre o teléfono..." autocomplete="off" />
-            <input id="selected-customer-id" type="hidden" />
-            <div id="selected-customer" class="selected-customer hidden"></div>
-            <div id="customer-results" class="customer-results hidden" role="listbox"></div>
-          </div>
+          <h3 class="panel-title">Venta actual</h3>
+          <p class="panel-caption">
+            <span id="cart-count">0</span> artículos
+            <span aria-hidden="true"> · </span>
+            <span id="cart-peek-total">$0.00</span>
+          </p>
         </div>
-        <div class="flex items-center justify-between text-sm text-slate-500"><span>Subtotal</span><span id="cart-subtotal">$0.00</span></div>
-        <label class="block text-xs font-semibold text-slate-600">Descuento (%)
-          <input id="sale-discount" class="form-input mt-1.5 w-full" type="number" min="0" max="100" step="0.01" value="0" />
-        </label>
-        <div id="cart-discount-row" class="flex items-center justify-between text-sm text-rose-600 hidden"><span id="cart-discount-label">Descuento</span><span id="cart-discount">$0.00</span></div>
-        <div class="flex items-center justify-between text-base font-bold text-[#19241e]"><span>Total</span><span id="cart-total">$0.00</span></div>
-        <label class="block text-xs font-semibold text-slate-600">
-          Método de pago
-          <select id="payment-method" class="select-input mt-1.5 w-full"><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option><option value="Crédito">Crédito</option></select>
-        </label>
-        <div id="credit-initial-payment" class="hidden space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
-          <p class="text-xs font-semibold text-amber-900">El cliente recibe ahora los productos y el saldo quedará como deuda.</p>
-          <label class="block text-xs font-semibold text-slate-600">Abono inicial ($)
-            <input id="initial-payment-amount" class="form-input mt-1.5 w-full" type="number" min="0" step="0.01" value="0" />
-          </label>
-          <label class="block text-xs font-semibold text-slate-600">Método del abono
-            <select id="initial-payment-method" class="select-input mt-1.5 w-full"><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option></select>
-          </label>
+        <div class="flex items-center gap-2">
+          <button
+            id="toggle-cart"
+            class="pos-cart-toggle secondary-button min-h-9 px-3"
+            type="button"
+            aria-controls="cart-content"
+            aria-expanded="false"
+          >
+            Ver carrito
+          </button>
+          <button
+            id="clear-cart"
+            class="text-xs font-semibold text-slate-400 hover:text-rose-600"
+            type="button"
+          >
+            Vaciar
+          </button>
         </div>
-        <button id="complete-sale" class="primary-button w-full justify-center py-3 disabled:cursor-not-allowed disabled:opacity-45" disabled>Completar venta</button>
-        <p id="sale-requirements" class="text-center text-[10px] text-slate-400">Selecciona un cliente y agrega productos para continuar.</p>
+      </div>
+
+      <div id="cart-content">
+        <div
+          id="cart-items"
+          class="scrollbar-thin max-h-[340px] divide-y divide-[#edf0ec] overflow-y-auto px-5"
+        ></div>
+        <div
+          id="cart-empty"
+          class="px-5 pb-5 text-center text-sm text-slate-400"
+        >
+          Agrega productos para comenzar.
+        </div>
+        <div class="space-y-3 border-t border-[#edf0ec] bg-[#fafbf9] p-5">
+          <div>
+            <div class="mb-1.5 flex items-center justify-between gap-2">
+              <label for="customer-search" class="text-xs font-semibold text-slate-600">
+                Cliente <span class="text-rose-600">*</span>
+              </label>
+              <button
+                id="open-customer-modal"
+                type="button"
+                class="text-[11px] font-semibold text-blue-700 hover:underline"
+              >
+                ＋ Nuevo cliente
+              </button>
+            </div>
+            <div id="customer-picker" class="customer-picker">
+              <label class="search-field">
+                <span class="search-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <circle cx="10.8" cy="10.8" r="6.8"></circle>
+                    <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
+                  </svg>
+                </span>
+                <input
+                  id="customer-search"
+                  class="search-input"
+                  type="search"
+                  role="combobox"
+                  aria-label="Buscar cliente"
+                  aria-autocomplete="list"
+                  aria-controls="customer-results"
+                  aria-expanded="false"
+                  placeholder="Buscar por nombre o teléfono..."
+                  autocomplete="off"
+                />
+              </label>
+              <input id="selected-customer-id" type="hidden" />
+              <div id="selected-customer" class="selected-customer hidden"></div>
+              <div id="customer-results" class="customer-results hidden" role="listbox"></div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between text-sm text-slate-500">
+            <span>Subtotal</span><span id="cart-subtotal">$0.00</span>
+          </div>
+          <label class="block text-xs font-semibold text-slate-600">
+            Descuento (%)
+            <input
+              id="sale-discount"
+              class="form-input mt-1.5 w-full"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value="0"
+            />
+          </label>
+          <div
+            id="cart-discount-row"
+            class="hidden flex items-center justify-between text-sm text-rose-600"
+          >
+            <span id="cart-discount-label">Descuento</span>
+            <span id="cart-discount">$0.00</span>
+          </div>
+          <div class="flex items-center justify-between text-base font-bold text-[#19241e]">
+            <span>Total</span><span id="cart-total">$0.00</span>
+          </div>
+          <label class="block text-xs font-semibold text-slate-600">
+            Método de pago
+            <select id="payment-method" class="select-input mt-1.5 w-full">
+              <option value="Efectivo">Efectivo</option>
+              <option value="Transferencia">Transferencia</option>
+              <option value="Tarjeta">Tarjeta</option>
+              <option value="Crédito">Crédito</option>
+            </select>
+          </label>
+          <div
+            id="credit-initial-payment"
+            class="hidden space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3"
+          >
+            <p class="text-xs font-semibold text-amber-900">
+              El cliente recibe ahora los productos y el saldo quedará como deuda.
+            </p>
+            <label class="block text-xs font-semibold text-slate-600">
+              Abono inicial ($)
+              <input
+                id="initial-payment-amount"
+                class="form-input mt-1.5 w-full"
+                type="number"
+                min="0"
+                step="0.01"
+                value="0"
+              />
+            </label>
+            <label class="block text-xs font-semibold text-slate-600">
+              Método del abono
+              <select id="initial-payment-method" class="select-input mt-1.5 w-full">
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Tarjeta">Tarjeta</option>
+              </select>
+            </label>
+          </div>
+          <button
+            id="complete-sale"
+            class="primary-button w-full justify-center py-3 disabled:cursor-not-allowed disabled:opacity-45"
+            disabled
+          >
+            Completar venta
+          </button>
+          <p id="sale-requirements" class="text-center text-[10px] text-slate-400">
+            Selecciona un cliente y agrega productos para continuar.
+          </p>
+        </div>
       </div>
     </aside>
   </div>

@@ -5,7 +5,7 @@
   gap: 12px;
   border-radius: 10px;
   padding: 11px 12px;
-  color: rgb(236 253 245 / 68%);
+  color: rgb(228 228 231 / 80%);
   text-align: left;
   font-size: 13px;
   font-weight: 550;
@@ -18,8 +18,8 @@
 }
 
 .nav-link.is-active {
-  color: #173d32;
-  background: #c8ed76;
+  color: white;
+  background: #1d4ed8;
   font-weight: 700;
 }
 
@@ -35,7 +35,7 @@
   border: 1px solid #e8ece7;
   border-radius: 16px;
   background: white;
-  box-shadow: 0 2px 6px rgb(23 61 50 / 2%);
+  box-shadow: 0 2px 6px rgb(15 23 42 / 3%);
 }
 
 .metric-card {
@@ -123,11 +123,11 @@
 
 .primary-button {
   color: white;
-  background: #1d5d43;
+  background: #1d4ed8;
 }
 
 .primary-button:hover {
-  background: #174a36;
+  background: #1e40af;
 }
 
 .primary-button:active,
@@ -142,19 +142,18 @@
 }
 
 .secondary-button:hover {
-  background: #f7f9f6;
+  background: #f1f5f9;
 }
 
 .sale-action {
   border-radius: 7px;
   padding: 7px 10px;
-  color: #287052;
+  color: #1d4ed8;
   font-size: 11px;
   font-weight: 700;
 }
 
 .sale-action:hover {
-  background: #edf6ef;
-  color: #173d32;
+  background: #dbeafe;
+  color: #1e3a8a;
 }
-
