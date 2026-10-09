@@ -665,6 +665,10 @@ function resetColorForm(): void {
 }
 
 function collectProductVariantDrafts(): ProductVariant[] {
+  const basePriceField = byId<HTMLFormElement>("product-form")?.elements
+    .namedItem("price");
+  const basePrice =
+    basePriceField instanceof HTMLInputElement ? basePriceField.value : "0";
   return [
     ...(byId("product-variants")?.querySelectorAll<HTMLElement>(
       "[data-variant-row]",
@@ -689,7 +693,7 @@ function collectProductVariantDrafts(): ProductVariant[] {
         row.querySelector<HTMLInputElement>("[data-variant-min-stock]")?.value ??
           0,
       ),
-      price: Number(sizePrice?.value ?? row.dataset.variantPrice ?? 0),
+      price: Number(sizePrice?.value ?? basePrice),
     };
   });
 }
