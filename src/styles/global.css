@@ -401,6 +401,54 @@ html[data-theme="dark"] .search-field:focus-within .search-icon {
   }
 }
 
+@media (max-width: 639px) {
+  .search-input,
+  .select-input {
+    height: 36px;
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 11px;
+  }
+
+  .filter-label {
+    font-size: 10px;
+  }
+
+  #category-chips {
+    gap: 6px;
+  }
+
+  #category-chips .category-chip {
+    flex: 0 0 auto;
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+
+  #dashboard-app main {
+    min-width: 0;
+  }
+
+  #dashboard-app main > .mx-auto {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  #view-products > div:first-of-type > div:last-child {
+    flex-wrap: wrap;
+  }
+
+  #view-products > div:first-of-type > div:last-child button,
+  #view-users .secondary-button,
+  #view-categories .secondary-button {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .panel-heading {
+    padding: 12px 14px;
+  }
+}
+
 @media (min-width: 1280px) {
   #view-pos .pos-layout {
     display: grid;
@@ -452,4 +500,25 @@ html[data-theme="dark"] .search-field:focus-within .search-icon {
 dialog::backdrop {
   background: rgb(9 9 11 / 55%);
   backdrop-filter: blur(3px);
+}
+
+@media (max-width: 639px) {
+  html[data-theme="dark"] #dashboard-app .data-table tbody tr {
+    border-color: #3f3f46;
+    color: #f4f4f5;
+    background-color: #18181b;
+  }
+
+  html[data-theme="dark"] #dashboard-app .data-table tbody tr:hover {
+    background-color: #27272a;
+  }
+
+  html[data-theme="dark"] #dashboard-app .data-table tbody td {
+    border-color: #3f3f46;
+    color: #e4e4e7;
+  }
+
+  html[data-theme="dark"] #dashboard-app .data-table tbody td::before {
+    color: #a1a1aa;
+  }
 }

@@ -102,6 +102,18 @@ const tallas: Array<{ id: number; nombre: string; orden: number }> = [];
 const colors: Array<{ id: number; nombre: string }> = [];
 const inventoryUsers: ManagedInventoryUser[] = [];
 
+type InventoryDataGroup =
+  | "core"
+  | "customers"
+  | "movements"
+  | "categories"
+  | "sizes"
+  | "colors"
+  | "users";
+
+const loadedInventoryData = new Set<InventoryDataGroup>();
+const pendingInventoryData = new Map<InventoryDataGroup, Promise<void>>();
+
 const cart = new Map<string, number>();
 const deletedProductSnapshots = new Map<number, Product>();
 const editedProductSnapshots = new Map<number, Product>();
@@ -109,10 +121,14 @@ let activeCategory = "Todas";
 let toastTimeout = 0;
 let currentUser: InventoryUser | null = null;
 let editingSaleId: string | null = null;
+let viewSwitchGeneration = 0;
 let realtimeSocket: Socket | null = null;
 let realtimeRefreshTimeout = 0;
 let realtimeRefreshInProgress = false;
 let realtimeRefreshPending = false;
+let inventoryDataGeneration = 0;
+let initializedDataGeneration = -1;
+let realtimeHasConnected = false;
 let openCustomerAccountId: number | null = null;
 let pendingProductDeleteId: number | null = null;
 const apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
@@ -344,6 +360,20 @@ setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
 function showLogin(message = ""): void {
   currentUser = null;
+  viewSwitchGeneration += 1;
+  inventoryDataGeneration += 1;
+  realtimeRefreshPending = false;
+  realtimeHasConnected = false;
+  loadedInventoryData.clear();
+  pendingInventoryData.clear();
+  customers.length = 0;
+  products.length = 0;
+  movements.length = 0;
+  sales.length = 0;
+  categories.length = 0;
+  tallas.length = 0;
+  colors.length = 0;
+  inventoryUsers.length = 0;
   realtimeSocket?.disconnect();
   realtimeSocket = null;
   const login = byId<HTMLElement>("login-screen");
@@ -368,92 +398,149 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-async function loadDashboardData(): Promise<void> {
-  if (!currentUser) return;
-  const productPath =
-    currentUser.rol === "ADMIN" ? "/productos" : "/productos/venta";
-  const [
-    clientesApi,
-    productosApi,
-    ventasApi,
-    movimientosApi,
-    categoriasApi,
-    tallasApi,
-    coloresApi,
-    usuariosApi,
-  ] = await Promise.all([
-    inventoryRequest<
-      Array<{
-        id: number;
-        nombre: string;
-        telefono: string;
-        cedula?: string | null;
-        direccion?: string | null;
-        saldoDeuda: number;
-      }>
-    >("/clientes"),
-    inventoryRequest<Array<Omit<Product, "tone" | "initials">>>(productPath),
-    inventoryRequest<Array<Omit<Sale, "date"> & { date: string | Date }>>(
-      "/ventas",
-    ),
-    currentUser.rol === "ADMIN"
-      ? inventoryRequest<
-          Array<Omit<Movement, "date"> & { date: string | Date }>
-        >("/movimientos")
-      : Promise.resolve(
-          [] as Array<Omit<Movement, "date"> & { date: string | Date }>,
-        ),
-    currentUser.rol === "ADMIN"
-      ? inventoryRequest<Array<{ id: number; nombre: string }>>("/categorias")
-      : Promise.resolve([] as Array<{ id: number; nombre: string }>),
-    currentUser.rol === "ADMIN"
-      ? inventoryRequest<Array<{ id: number; nombre: string; orden: number }>>(
-          "/tallas",
-        )
-      : Promise.resolve(
-          [] as Array<{ id: number; nombre: string; orden: number }>,
-        ),
-    currentUser.rol === "ADMIN"
-      ? inventoryRequest<Array<{ id: number; nombre: string }>>("/colores")
-      : Promise.resolve([] as Array<{ id: number; nombre: string }>),
-    currentUser.rol === "ADMIN"
-      ? inventoryRequest<ManagedInventoryUser[]>("/usuarios")
-      : Promise.resolve([] as ManagedInventoryUser[]),
-  ]);
+async function loadInventoryDataGroup(
+  group: InventoryDataGroup,
+  force: boolean,
+): Promise<void> {
+  if (!currentUser || (!force && loadedInventoryData.has(group))) return;
+  const pending = pendingInventoryData.get(group);
+  if (pending) return pending;
 
-  customers.splice(
-    0,
-    customers.length,
-    ...clientesApi.map((cliente) => ({
-      id: cliente.id,
-      name: cliente.nombre,
-      phone: cliente.telefono,
-      cedula: cliente.cedula,
-      direccion: cliente.direccion,
-      saldoDeuda: cliente.saldoDeuda,
-    })),
+  const user = currentUser;
+  const generation = inventoryDataGeneration;
+  const productPath = user.rol === "ADMIN" ? "/productos" : "/productos/venta";
+  const request = (async () => {
+    switch (group) {
+      case "core": {
+        const [productosApi, ventasApi] = await Promise.all([
+          inventoryRequest<Array<Omit<Product, "tone" | "initials">>>(
+            productPath,
+          ),
+          inventoryRequest<
+            Array<Omit<Sale, "date"> & { date: string | Date }>
+          >("/ventas"),
+        ]);
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        products.splice(0, products.length, ...productosApi.map(normalizedProduct));
+        sales.splice(
+          0,
+          sales.length,
+          ...ventasApi.map((sale) => ({ ...sale, date: new Date(sale.date) })),
+        );
+        break;
+      }
+      case "customers": {
+        const clientesApi = await inventoryRequest<
+          Array<{
+            id: number;
+            nombre: string;
+            telefono: string;
+            cedula?: string | null;
+            direccion?: string | null;
+            saldoDeuda: number;
+          }>
+        >("/clientes");
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        customers.splice(
+          0,
+          customers.length,
+          ...clientesApi.map((cliente) => ({
+            id: cliente.id,
+            name: cliente.nombre,
+            phone: cliente.telefono,
+            cedula: cliente.cedula,
+            direccion: cliente.direccion,
+            saldoDeuda: cliente.saldoDeuda,
+          })),
+        );
+        break;
+      }
+      case "movements": {
+        const movimientosApi =
+          user.rol === "ADMIN"
+            ? await inventoryRequest<
+                Array<Omit<Movement, "date"> & { date: string | Date }>
+              >("/movimientos")
+            : [];
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        movements.splice(
+          0,
+          movements.length,
+          ...movimientosApi.map((movement) => ({
+            ...movement,
+            date: new Date(movement.date),
+          })),
+        );
+        break;
+      }
+      case "categories": {
+        const result =
+          user.rol === "ADMIN"
+            ? await inventoryRequest<Array<{ id: number; nombre: string }>>(
+                "/categorias",
+              )
+            : [];
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        categories.splice(0, categories.length, ...result);
+        break;
+      }
+      case "sizes": {
+        const result =
+          user.rol === "ADMIN"
+            ? await inventoryRequest<
+                Array<{ id: number; nombre: string; orden: number }>
+              >("/tallas")
+            : [];
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        tallas.splice(0, tallas.length, ...result);
+        break;
+      }
+      case "colors": {
+        const result =
+          user.rol === "ADMIN"
+            ? await inventoryRequest<Array<{ id: number; nombre: string }>>(
+                "/colores",
+              )
+            : [];
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        colors.splice(0, colors.length, ...result);
+        break;
+      }
+      case "users": {
+        const result =
+          user.rol === "ADMIN"
+            ? await inventoryRequest<ManagedInventoryUser[]>("/usuarios")
+            : [];
+        if (generation !== inventoryDataGeneration || currentUser !== user)
+          return;
+        inventoryUsers.splice(0, inventoryUsers.length, ...result);
+        break;
+      }
+    }
+    if (generation === inventoryDataGeneration && currentUser === user)
+      loadedInventoryData.add(group);
+  })().finally(() => {
+    if (pendingInventoryData.get(group) === request)
+      pendingInventoryData.delete(group);
+  });
+  pendingInventoryData.set(group, request);
+  return request;
+}
+
+async function loadDashboardData(
+  groups: readonly InventoryDataGroup[] = [...loadedInventoryData],
+  force = true,
+): Promise<void> {
+  if (!currentUser) return;
+  const results = await Promise.allSettled(
+    groups.map((group) => loadInventoryDataGroup(group, force)),
   );
-  products.splice(0, products.length, ...productosApi.map(normalizedProduct));
-  sales.splice(
-    0,
-    sales.length,
-    ...ventasApi.map((sale) => ({
-      ...sale,
-      date: new Date(sale.date),
-    })),
-  );
-  movements.splice(
-    0,
-    movements.length,
-    ...movimientosApi.map((movement) => ({
-      ...movement,
-      date: new Date(movement.date),
-    })),
-  );
-  categories.splice(0, categories.length, ...categoriasApi);
-  tallas.splice(0, tallas.length, ...tallasApi);
-  colors.splice(0, colors.length, ...coloresApi);
-  inventoryUsers.splice(0, inventoryUsers.length, ...usuariosApi);
   renderCategoryOptions();
   renderProductVariantFields();
   renderTallas();
@@ -463,12 +550,29 @@ async function loadDashboardData(): Promise<void> {
   renderCustomers();
   renderCustomersTable();
   renderInventoryUsers();
+  const failed = results.find(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (failed) throw failed.reason;
 }
 
 async function authenticate(username: string, password: string): Promise<void> {
   const result = await loginInventory(username, password);
   setAuthenticatedView(result.usuario);
-  await loadDashboardData();
+  await loadInitialDashboardData();
+}
+
+async function loadInitialDashboardData(): Promise<void> {
+  const groups: InventoryDataGroup[] = ["core"];
+  if (currentUser?.rol === "ADMIN") groups.push("movements");
+  const generation = inventoryDataGeneration;
+  await loadDashboardData(groups, false);
+  if (generation !== inventoryDataGeneration) return;
+  initializedDataGeneration = generation;
+  if (realtimeRefreshPending && !document.hidden) {
+    realtimeRefreshPending = false;
+    refreshForRealtimeChange();
+  }
 }
 
 byId("login-form")?.addEventListener("submit", async (event) => {
@@ -977,6 +1081,10 @@ function renderCustomersTable(): void {
 
 function refreshForRealtimeChange(): void {
   if (!currentUser) return;
+  if (initializedDataGeneration !== inventoryDataGeneration) {
+    realtimeRefreshPending = true;
+    return;
+  }
   if (document.hidden) {
     realtimeRefreshPending = true;
     return;
@@ -986,7 +1094,7 @@ function refreshForRealtimeChange(): void {
     return;
   }
   realtimeRefreshInProgress = true;
-  void loadDashboardData()
+  void loadDashboardData([...loadedInventoryData], true)
     .then(async () => {
       const accountId = openCustomerAccountId;
       if (
@@ -1015,7 +1123,10 @@ function connectRealtimeUpdates(): void {
     window.clearTimeout(realtimeRefreshTimeout);
     realtimeRefreshTimeout = window.setTimeout(refreshForRealtimeChange, 150);
   };
-  realtimeSocket.on("connect", scheduleRefresh);
+  realtimeSocket.on("connect", () => {
+    if (realtimeHasConnected) scheduleRefresh();
+    realtimeHasConnected = true;
+  });
   realtimeSocket.on("inventarioActualizado", scheduleRefresh);
   realtimeSocket.on("finanzasActualizadas", scheduleRefresh);
   realtimeSocket.on("pedidoActualizado", scheduleRefresh);
@@ -2176,42 +2287,72 @@ function setMobileCartOpen(open: boolean): void {
 }
 
 function switchView(view: string, title?: string): void {
-  if (view !== "pos") setMobileCartOpen(false);
-  document.querySelectorAll<HTMLElement>(".app-view").forEach((section) => {
-    section.classList.toggle("hidden", section.id !== `view-${view}`);
-  });
-  document.querySelectorAll<HTMLButtonElement>(".nav-link").forEach((link) => {
-    link.classList.toggle("is-active", link.dataset.view === view);
-  });
-  const activeLink = document.querySelector<HTMLButtonElement>(
-    `.nav-link[data-view="${view}"]`,
-  );
-  const heading = title ?? activeLink?.dataset.title ?? "Resumen";
-  byId("page-title")!.textContent = heading;
-  byId("breadcrumb-title")!.textContent = heading;
-  const posTitle = byId("pos-title");
-  if (posTitle) {
-    posTitle.textContent = editingSaleId
-      ? `Editar ${editingSaleId}`
-      : "Punto de venta";
-  }
-
-  byId("cancel-edit-sale")?.classList.toggle("hidden", !editingSaleId);
-  closeSidebar();
-  if (view === "products") renderProducts();
-  if (view === "categories") renderCategories();
-  if (view === "users") renderInventoryUsers();
-  if (view === "customers") renderCustomersTable();
-  if (view === "movements") renderMovements();
-  if (view === "pos") {
-    renderPos();
-    window.setTimeout(
-      () => byId<HTMLInputElement>("barcode-input")?.focus(),
-      0,
+  const generation = ++viewSwitchGeneration;
+  const dataGroups: Partial<Record<string, readonly InventoryDataGroup[]>> = {
+    products: ["categories", "sizes", "colors"],
+    categories: ["categories"],
+    users: ["users"],
+    customers: ["customers"],
+    movements: ["movements"],
+    pos: ["customers"],
+  };
+  const groups = dataGroups[view] ?? [];
+  const activateView = () => {
+    if (generation !== viewSwitchGeneration) return;
+    if (view !== "pos") setMobileCartOpen(false);
+    document.querySelectorAll<HTMLElement>(".app-view").forEach((section) => {
+      section.classList.toggle("hidden", section.id !== `view-${view}`);
+    });
+    document
+      .querySelectorAll<HTMLButtonElement>(".nav-link")
+      .forEach((link) => {
+        link.classList.toggle("is-active", link.dataset.view === view);
+      });
+    const activeLink = document.querySelector<HTMLButtonElement>(
+      `.nav-link[data-view="${view}"]`,
     );
+    const heading = title ?? activeLink?.dataset.title ?? "Resumen";
+    byId("page-title")!.textContent = heading;
+    byId("breadcrumb-title")!.textContent = heading;
+    const posTitle = byId("pos-title");
+    if (posTitle) {
+      posTitle.textContent = editingSaleId
+        ? `Editar ${editingSaleId}`
+        : "Punto de venta";
+    }
+
+    byId("cancel-edit-sale")?.classList.toggle("hidden", !editingSaleId);
+    closeSidebar();
+    if (view === "products") renderProducts();
+    if (view === "categories") renderCategories();
+    if (view === "users") renderInventoryUsers();
+    if (view === "customers") renderCustomersTable();
+    if (view === "movements") renderMovements();
+    if (view === "pos") {
+      renderPos();
+      window.setTimeout(
+        () => byId<HTMLInputElement>("barcode-input")?.focus(),
+        0,
+      );
+    }
+    if (view === "sales") renderSales();
+    if (view === "sales-stats") renderSalesStats();
+  };
+
+  if (groups.some((group) => !loadedInventoryData.has(group))) {
+    void loadDashboardData(groups, false)
+      .then(activateView)
+      .catch((cause: unknown) => {
+        if (generation !== viewSwitchGeneration) return;
+        notify(
+          cause instanceof Error
+            ? `No se pudieron cargar los datos de esta sección: ${cause.message}`
+            : "No se pudieron cargar los datos de esta sección.",
+        );
+      });
+    return;
   }
-  if (view === "sales") renderSales();
-  if (view === "sales-stats") renderSalesStats();
+  activateView();
 }
 
 function closeSidebar(): void {
@@ -3418,7 +3559,7 @@ async function initializeDashboard(): Promise<void> {
       usuario: InventoryUser;
     }>("/auth/perfil");
     setAuthenticatedView(result.usuario);
-    await loadDashboardData();
+    await loadInitialDashboardData();
   } catch (cause) {
     showLogin(
       cause instanceof Error
