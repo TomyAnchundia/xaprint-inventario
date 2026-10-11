@@ -6,6 +6,7 @@ export interface InventoryUser {
 
 const apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
 const tokenKey = "xaprint-inventario-token";
+let sessionExpiryTimer = 0;
 let pendingRequests = 0;
 let requestStatusDialog: HTMLDialogElement | null = null;
 
@@ -48,11 +49,53 @@ export function getInventoryToken(): string | null {
 }
 
 export function clearInventoryToken(): void {
+  window.clearTimeout(sessionExpiryTimer);
+  sessionExpiryTimer = 0;
   localStorage.removeItem(tokenKey);
 }
 
 export function saveInventoryToken(token: string): void {
   localStorage.setItem(tokenKey, token);
+  vigilarExpiracionInventario(token);
+}
+
+export function vigilarExpiracionInventario(token: string): void {
+  window.clearTimeout(sessionExpiryTimer);
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return;
+    const normalizedPayload = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const claims: unknown = JSON.parse(
+      window.atob(
+        normalizedPayload.padEnd(
+          Math.ceil(normalizedPayload.length / 4) * 4,
+          "=",
+        ),
+      ),
+    );
+    if (
+      typeof claims !== "object" ||
+      claims === null ||
+      !("exp" in claims) ||
+      typeof claims.exp !== "number" ||
+      !Number.isFinite(claims.exp)
+    ) {
+      return;
+    }
+
+    const expireSession = () => {
+      clearInventoryToken();
+      window.dispatchEvent(new Event("inventario:unauthorized"));
+    };
+    const remaining = claims.exp * 1000 - Date.now();
+    if (remaining <= 0) {
+      expireSession();
+      return;
+    }
+    sessionExpiryTimer = window.setTimeout(expireSession, remaining);
+  } catch {
+    // El servidor sigue siendo quien valida tokens malformados.
+  }
 }
 
 export async function inventoryRequest<T>(
@@ -71,7 +114,7 @@ export async function inventoryRequest<T>(
       },
     });
 
-    if (response.status === 401) {
+    if (response.status === 401 && token) {
       clearInventoryToken();
       window.dispatchEvent(new Event("inventario:unauthorized"));
     }

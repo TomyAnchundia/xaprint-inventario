@@ -7,6 +7,7 @@ import {
   inventoryRequest,
   loginInventory,
   type InventoryUser,
+  vigilarExpiracionInventario,
 } from "../services/api";
 
 interface Product {
@@ -1116,8 +1117,60 @@ function refreshForRealtimeChange(): void {
     });
 }
 
+function setRealtimeConnectionStatus(
+  state: "connecting" | "connected" | "disconnected",
+): void {
+  const status = byId("estado-api");
+  const point = byId("estado-api-punto");
+  const ping = byId("estado-api-ping");
+  const text = byId("estado-api-texto");
+  if (!status || !point || !ping || !text) return;
+
+  const styles = {
+    connecting: {
+      container:
+        "flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1.5 sm:px-3",
+      label: "Conectando...",
+      ariaLabel: "Conectando con el servidor",
+      point: "relative inline-flex h-2 w-2 rounded-full bg-slate-400",
+      ping:
+        "absolute inline-flex h-full w-full animate-ping rounded-full bg-slate-400 opacity-75",
+      text: "sr-only text-xs font-medium text-slate-500 sm:not-sr-only",
+    },
+    connected: {
+      container:
+        "flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1.5 sm:px-3",
+      label: "Sistema conectado",
+      ariaLabel: "Sistema conectado",
+      point: "relative inline-flex h-2 w-2 rounded-full bg-emerald-500",
+      ping:
+        "absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75",
+      text: "sr-only text-xs font-medium text-emerald-700 sm:not-sr-only",
+    },
+    disconnected: {
+      container:
+        "flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-2 py-1.5 sm:px-3",
+      label: "Sin conexión",
+      ariaLabel: "Sin conexión",
+      point: "relative inline-flex h-2 w-2 rounded-full bg-red-500",
+      ping:
+        "absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75",
+      text: "sr-only text-xs font-medium text-red-700 sm:not-sr-only",
+    },
+  }[state];
+
+  status.dataset.connectionState = state;
+  status.className = styles.container;
+  status.setAttribute("aria-label", styles.ariaLabel);
+  point.className = styles.point;
+  ping.className = styles.ping;
+  text.className = styles.text;
+  text.textContent = styles.label;
+}
+
 function connectRealtimeUpdates(): void {
   if (realtimeSocket) return;
+  setRealtimeConnectionStatus("connecting");
   realtimeSocket = io(`${apiUrl}/pedidos`, { transports: ["websocket"] });
   const scheduleRefresh = () => {
     window.clearTimeout(realtimeRefreshTimeout);
@@ -1126,11 +1179,16 @@ function connectRealtimeUpdates(): void {
   realtimeSocket.on("connect", () => {
     if (realtimeHasConnected) scheduleRefresh();
     realtimeHasConnected = true;
+    setRealtimeConnectionStatus("connected");
+  });
+  realtimeSocket.on("disconnect", () => {
+    setRealtimeConnectionStatus("disconnected");
   });
   realtimeSocket.on("inventarioActualizado", scheduleRefresh);
   realtimeSocket.on("finanzasActualizadas", scheduleRefresh);
   realtimeSocket.on("pedidoActualizado", scheduleRefresh);
   realtimeSocket.on("connect_error", (cause: Error) => {
+    setRealtimeConnectionStatus("disconnected");
     console.error("No se pudo conectar a las actualizaciones en tiempo real:", cause.message);
   });
 }
@@ -2313,7 +2371,6 @@ function switchView(view: string, title?: string): void {
     );
     const heading = title ?? activeLink?.dataset.title ?? "Resumen";
     byId("page-title")!.textContent = heading;
-    byId("breadcrumb-title")!.textContent = heading;
     const posTitle = byId("pos-title");
     if (posTitle) {
       posTitle.textContent = editingSaleId
@@ -3558,14 +3615,19 @@ async function initializeDashboard(): Promise<void> {
       success: true;
       usuario: InventoryUser;
     }>("/auth/perfil");
+    vigilarExpiracionInventario(token);
     setAuthenticatedView(result.usuario);
     await loadInitialDashboardData();
   } catch (cause) {
-    showLogin(
-      cause instanceof Error
-        ? `No se pudo conectar con el inventario: ${cause.message}`
-        : "No se pudo validar la sesión de inventario.",
-    );
+    if (!getInventoryToken()) {
+      showLogin("La sesión expiró. Inicia sesión de nuevo.");
+    } else {
+      showLogin(
+        cause instanceof Error
+          ? `No se pudo conectar con el inventario: ${cause.message}`
+          : "No se pudo validar la sesión de inventario.",
+      );
+    }
   }
 }
 

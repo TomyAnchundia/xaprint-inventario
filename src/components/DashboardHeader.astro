@@ -1,17 +1,16 @@
 <header
-  class="sticky top-0 z-50 flex h-[78px] items-center justify-between border-b border-[#e8ece7] bg-[#f8faf7]/95 px-4 backdrop-blur sm:px-7 lg:px-10"
+  id="dashboard-header"
+  class="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-[#e8ece7] bg-[#f8faf7]/95 px-4 backdrop-blur sm:px-7 lg:px-10"
 >
-  <div class="flex min-w-0 items-center gap-3">
+  <div class="flex min-w-0 items-center gap-2 sm:gap-3">
     <button
       id="open-sidebar"
       class="flex h-10 w-10 items-center justify-center rounded-xl border border-[#e2e8e1] bg-white text-lg text-slate-700 lg:hidden"
       aria-label="Abrir menú"
     >☰</button>
+    <img class="brand-logo header-logo shrink-0 lg:hidden" src="/logo-xaprint.svg" alt="Xaprint" />
     <div class="min-w-0">
-      <p class="hidden text-[11px] font-medium text-slate-400 sm:block">
-        Xaprint <span class="px-1">/</span><span id="breadcrumb-title">Resumen</span>
-      </p>
-      <h1 id="page-title" class="truncate text-lg font-bold text-[#19241e] sm:mt-1 sm:text-xl">
+      <h1 id="page-title" class="hidden truncate text-base font-bold text-[#19241e] sm:text-xl lg:block">
         Resumen
       </h1>
     </div>
@@ -28,9 +27,27 @@
       <span data-theme-icon aria-hidden="true">☾</span>
       <span class="hidden sm:inline" data-theme-label>Modo oscuro</span>
     </button>
-    <div class="hidden items-center gap-2 rounded-full border border-[#e3e9e2] bg-white px-3 py-2 sm:flex">
-      <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-      <span class="text-[11px] font-medium text-slate-500">Base de datos conectada</span>
+    <div
+      id="estado-api"
+      data-connection-state="connecting"
+      role="status"
+      aria-label="Conectando con el servidor"
+      title="Estado de conexión con el servidor"
+      class="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2 py-1.5 sm:px-3"
+    >
+      <span class="relative flex h-2 w-2">
+        <span
+          id="estado-api-ping"
+          class="absolute inline-flex h-full w-full animate-ping rounded-full bg-slate-400 opacity-75"
+        ></span>
+        <span
+          id="estado-api-punto"
+          class="relative inline-flex h-2 w-2 rounded-full bg-slate-400"
+        ></span>
+      </span>
+      <span id="estado-api-texto" class="sr-only text-xs font-medium text-slate-500 sm:not-sr-only">
+        Conectando...
+      </span>
     </div>
     <button
       class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-[#e3e9e2] bg-white text-slate-500"
