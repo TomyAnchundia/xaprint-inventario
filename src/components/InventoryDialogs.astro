@@ -98,6 +98,44 @@
   <div id="sale-confirm-content"></div>
 </dialog>
 
+<dialog
+  id="clear-sale-modal"
+  class="modal-card w-[min(420px,calc(100%-2rem))]"
+  aria-labelledby="clear-sale-title"
+>
+  <div class="modal-heading">
+    <div>
+      <h2 id="clear-sale-title" class="text-lg font-bold">Vaciar venta</h2>
+      <p class="mt-1 text-xs text-slate-500">
+        Se quitarán todos los productos y descuentos de esta venta.
+      </p>
+    </div>
+    <button
+      type="button"
+      class="modal-close"
+      data-close="clear-sale-modal"
+      aria-label="Cerrar">✕</button
+    >
+  </div>
+  <div class="p-5">
+    <p class="text-sm text-slate-600">
+      ¿Quieres vaciar la venta? Esta acción no se puede deshacer.
+    </p>
+  </div>
+  <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4">
+    <button type="button" class="secondary-button" data-close="clear-sale-modal">
+      Cancelar
+    </button>
+    <button
+      id="confirm-clear-sale"
+      type="button"
+      class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+    >
+      Vaciar venta
+    </button>
+  </div>
+</dialog>
+
 <dialog id="sale-receipt-modal" class="modal-card w-[min(500px,calc(100%-2rem))]">
   <div id="sale-receipt-content"></div>
 </dialog>

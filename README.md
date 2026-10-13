@@ -28,9 +28,12 @@ La migración inicial conserva los artículos anteriores como variantes de talla
 Los productos de categoría Insumos pueden habilitar la venta por caja y guardar
 unidades y precio especiales. El inventario siempre se cuenta en unidades
 físicas: vender una caja descuenta las unidades configuradas en ella. En el
-punto de venta se puede aplicar un descuento porcentual; el subtotal, el
-porcentaje, el monto descontado y el total neto quedan en la venta y el
-comprobante.
+punto de venta se puede aplicar un descuento porcentual a cada producto y otro
+a toda la venta. También se puede escribir el total que se desea cobrar para
+calcular automáticamente el porcentaje de descuento general. Ambos descuentos
+se guardan por separado y aparecen desglosados en el historial y comprobante.
+El vendedor puede revisar cantidades, cambiar la presentación, ajustar el
+descuento o quitar productos antes de confirmar la venta.
 El método **Crédito** entrega los productos al confirmar la venta y registra el
 saldo pendiente del cliente; antes de confirmar se puede registrar un abono
 inicial. Desde **Clientes**, la cuenta muestra las ventas a crédito y el

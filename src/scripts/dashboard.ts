@@ -62,6 +62,8 @@ interface SaleLine {
   unitsPerPresentation: number;
   quantity: number;
   price: number;
+  discountPercentage: number;
+  discountAmount: number;
 }
 
 interface Sale {
@@ -116,6 +118,7 @@ const loadedInventoryData = new Set<InventoryDataGroup>();
 const pendingInventoryData = new Map<InventoryDataGroup, Promise<void>>();
 
 const cart = new Map<string, number>();
+const cartProductDiscounts = new Map<string, number>();
 const deletedProductSnapshots = new Map<number, Product>();
 const editedProductSnapshots = new Map<number, Product>();
 let activeCategory = "Todas";
@@ -1223,6 +1226,7 @@ async function openCustomerAccount(
           talla: string;
           presentacion: string;
           cantidad: number;
+          descuentoMonto: number;
           total: number;
         }>;
       }>;
@@ -1260,7 +1264,7 @@ async function openCustomerAccount(
                   <p class="mt-1 text-[11px] text-slate-500">${venta.items.map((item) => `${escapeHtml(item.nombre)} ${escapeHtml(item.talla)} × ${item.cantidad} ${item.presentacion === "CAJA" ? "(caja)" : ""}`).join(", ")}</p>
                 </div>
                 <div class="shrink-0 text-right text-xs">
-                  <p>Subtotal ${currency.format(venta.subtotal)}</p>${venta.descuentoPorcentaje > 0 ? `<p class="text-rose-600">Descuento ${venta.descuentoPorcentaje}% · −${currency.format(venta.descuentoMonto)}</p>` : ""}<p>Total ${currency.format(venta.total)}</p><p class="text-emerald-700">Abonado ${currency.format(venta.pagado)}</p>
+                  <p>Subtotal ${currency.format(venta.subtotal)}</p>${venta.items.some((item) => item.descuentoMonto > 0) ? `<p class="text-rose-600">Descuentos por productos · −${currency.format(venta.items.reduce((sum, item) => sum + item.descuentoMonto, 0))}</p>` : ""}${venta.descuentoPorcentaje > 0 ? `<p class="text-rose-600">Descuento general ${venta.descuentoPorcentaje}% · −${currency.format(venta.descuentoMonto)}</p>` : ""}<p>Total ${currency.format(venta.total)}</p><p class="text-emerald-700">Abonado ${currency.format(venta.pagado)}</p>
                   <p class="font-bold ${venta.saldo > 0 ? "text-rose-700" : "text-slate-500"}">Debe ${currency.format(venta.saldo)}</p>
                 </div>
               </div>
@@ -1421,13 +1425,16 @@ function renderPos(): void {
     container.innerHTML = filtered
       .map(
         ({ product, variant }) => `
-    <button class="product-tile group text-left" data-cart-add="${variant.id}">
+    <button class="product-tile group text-left" data-cart-add="${variant.id}" aria-label="Agregar ${escapeHtml(product.name)} ${escapeHtml(variantLabel(variant))} a la venta">
       <div class="flex h-28 items-center justify-center rounded-xl ${product.tone} transition group-hover:brightness-[0.98]">
         <span class="text-2xl font-black tracking-wide opacity-70">${escapeHtml(variantLabel(variant))}</span>
       </div>
       <div class="mt-3 flex items-start justify-between gap-2">
         <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">${escapeHtml(variantLabel(variant))} · ${availableForSale(variant, editedSale)} disponibles</p></div>
-        <span class="shrink-0 text-right text-xs font-bold text-blue-700">${currency.format(variant.price ?? product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
+        <span class="pos-product-price shrink-0 text-right text-xs font-bold">${currency.format(variant.price ?? product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="pos-box-price block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
+      </div>
+      <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[10px] font-semibold text-blue-700">
+        <span>Agregar a la venta</span><span class="text-base leading-none" aria-hidden="true">＋</span>
       </div>
     </button>
   `,
@@ -1459,6 +1466,7 @@ function renderCart(): void {
         item: variantFor(variantId),
         presentation,
         quantity,
+        discountPercentage: cartProductDiscounts.get(key) ?? 0,
       };
     })
     .filter(
@@ -1469,6 +1477,7 @@ function renderCart(): void {
         item: { product: Product; variant: ProductVariant };
         presentation: "UNIDAD" | "CAJA";
         quantity: number;
+        discountPercentage: number;
       } => Boolean(entry.item),
     );
   const items = byId("cart-items");
@@ -1484,6 +1493,19 @@ function renderCart(): void {
         entry.quantity,
     0,
   );
+  const productDiscountAmount = entries.reduce((sum, entry) => {
+    const lineSubtotal =
+      presentationPrice(
+        entry.item.product,
+        entry.presentation,
+        entry.item.variant,
+      ) * entry.quantity;
+    return (
+      sum + Math.round(lineSubtotal * entry.discountPercentage) / 100
+    );
+  }, 0);
+  const subtotalAfterProductDiscount =
+    Math.round((subtotal - productDiscountAmount) * 100) / 100;
   const discountInput = byId<HTMLInputElement>("sale-discount");
   const discountPercentage = Number(discountInput?.value ?? 0);
   const discountValid =
@@ -1491,13 +1513,31 @@ function renderCart(): void {
     discountPercentage >= 0 &&
     discountPercentage <= 100;
   const discountAmount = discountValid
-    ? Math.round(subtotal * discountPercentage) / 100
+    ? Math.round(subtotalAfterProductDiscount * discountPercentage) / 100
     : 0;
-  const total = Math.round((subtotal - discountAmount) * 100) / 100;
+  const total =
+    Math.round(
+      (subtotalAfterProductDiscount - discountAmount) * 100,
+    ) / 100;
+  const desiredTotalInput = byId<HTMLInputElement>("sale-total-desired");
+  const desiredTotalValue = desiredTotalInput?.value ?? "";
+  const desiredTotal = Number(desiredTotalValue);
+  const desiredTotalValid =
+    desiredTotalValue.trim() !== "" &&
+    Number.isFinite(desiredTotal) &&
+    desiredTotal >= 0 &&
+    desiredTotal <= subtotalAfterProductDiscount &&
+    Math.round(desiredTotal * 100) === Math.round(total * 100);
+  if (desiredTotalInput) {
+    desiredTotalInput.max = subtotalAfterProductDiscount.toFixed(2);
+    if (document.activeElement !== desiredTotalInput) {
+      desiredTotalInput.value = total.toFixed(2);
+    }
+  }
   if (items)
     items.innerHTML = entries
       .map(
-        ({ item, quantity, presentation, key }) => {
+        ({ item, quantity, presentation, key, discountPercentage }) => {
           const unidades = presentationUnits(item.product, presentation);
           const maximum = availableForCart(
             item.variant,
@@ -1509,41 +1549,65 @@ function renderCart(): void {
             presentation,
             item.variant,
           );
+          const lineDiscount =
+            Math.round(linePrice * quantity * discountPercentage) / 100;
+          const lineTotal =
+            Math.round((linePrice * quantity - lineDiscount) * 100) / 100;
           return `
-    <div class="space-y-2.5 py-3.5">
-      <div class="min-w-0">
-        <p class="break-words text-xs font-semibold leading-4 text-slate-700">${escapeHtml(item.product.name)}</p>
-        <p class="mt-0.5 text-[10px] text-slate-500">${escapeHtml(variantLabel(item.variant))}</p>
-      </div>
-      <div class="flex min-w-0 items-center justify-between gap-2">
-        <div class="min-w-0 flex-1">
-          ${item.product.unitsPerBox && item.product.boxPrice ? `<label class="block text-[9px] font-medium text-slate-400">Presentación<select class="form-input mt-0.5 h-7 w-full max-w-40 px-2 text-[10px]" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox})</option></select></label>` : ""}
+    <article class="space-y-3 rounded-xl border border-[#e8ece7] bg-white p-3 shadow-sm">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="wrap-break-word text-xs font-semibold leading-4 text-slate-700">${escapeHtml(item.product.name)}</p>
+          <p class="mt-1 text-[10px] text-slate-500">${escapeHtml(variantLabel(item.variant))} · ${currency.format(linePrice)} por ${presentation === "CAJA" ? "caja" : "unidad"}</p>
         </div>
-        <div class="flex shrink-0 items-center gap-1.5">
-          <label class="text-[10px] text-slate-500" for="cart-quantity-${key}">Cantidad</label>
-          <input id="cart-quantity-${key}" class="form-input h-7 w-14 px-1 text-center text-xs" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" />
+        <button class="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" type="button" data-cart-remove="${key}" aria-label="Quitar ${escapeHtml(item.product.name)} de la venta">
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-5 4v5m4-5v5"/></svg>
+          Quitar
+        </button>
+      </div>
+      <div class="flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-2">
+        <div class="flex flex-wrap items-end gap-3">
+          ${item.product.unitsPerBox && item.product.boxPrice ? `<label class="text-[10px] font-medium text-slate-500">Presentación<select class="form-input mt-1 h-8 w-28 px-2 text-xs" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox})</option></select></label>` : ""}
+          <label class="text-[10px] font-medium text-slate-500" for="cart-quantity-${key}">Cantidad<input id="cart-quantity-${key}" class="form-input mt-1 h-8 w-20 px-2 text-center text-xs" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" /></label>
+          <label class="text-[10px] font-medium text-slate-500">Desc. producto (%)<input class="form-input mt-1 h-8 w-24 px-2 text-center text-xs" type="number" min="0" max="100" step="0.01" value="${discountPercentage}" data-cart-product-discount="${key}" aria-label="Descuento de ${escapeHtml(item.product.name)} en porcentaje" /></label>
+        </div>
+        <div class="ml-auto text-right">
+          ${discountPercentage > 0 ? `<p class="text-[10px] font-semibold text-rose-600">Descuento ${discountPercentage}% · −${currency.format(lineDiscount)}</p>` : ""}
+          <p class="cart-original-price text-[10px]">${currency.format(linePrice * quantity)} antes de descuento</p>
+          <p class="cart-line-total text-sm font-bold text-slate-800">${currency.format(lineTotal)}</p>
         </div>
       </div>
-      <div class="flex items-center justify-between border-t border-slate-100 pt-2">
-        <span class="text-[10px] text-slate-400">${currency.format(linePrice)} c/u</span>
-        <strong class="text-xs font-bold text-slate-700">${currency.format(linePrice * quantity)}</strong>
-      </div>
-    </div>`;
+    </article>`;
         },
       )
       .join("");
   byId("cart-count")!.textContent = String(itemCount);
   byId("cart-peek-total")!.textContent = currency.format(total);
   byId("cart-subtotal")!.textContent = currency.format(subtotal);
-  byId("cart-discount-row")?.classList.toggle(
-    "hidden",
-    !discountValid || discountPercentage <= 0,
-  );
+  const productDiscountRow = byId("cart-product-discount-row");
+  const showProductDiscount = productDiscountAmount > 0;
+  productDiscountRow?.classList.toggle("hidden", !showProductDiscount);
+  productDiscountRow?.classList.toggle("flex", showProductDiscount);
+  byId("cart-product-discount")!.textContent =
+    `−${currency.format(productDiscountAmount)}`;
+  const saleDiscountRow = byId("cart-discount-row");
+  const showSaleDiscount = discountValid && discountPercentage > 0;
+  saleDiscountRow?.classList.toggle("hidden", !showSaleDiscount);
+  saleDiscountRow?.classList.toggle("flex", showSaleDiscount);
   byId("cart-discount-label")!.textContent =
-    `Descuento (${discountPercentage || 0}%)`;
+    `Descuento general (${discountPercentage || 0}%)`;
   byId("cart-discount")!.textContent = `−${currency.format(discountAmount)}`;
   byId("cart-total")!.textContent = currency.format(total);
   byId("cart-empty")?.classList.toggle("hidden", entries.length > 0);
+  const clearCartButton = byId<HTMLButtonElement>("clear-cart");
+  if (clearCartButton) {
+    clearCartButton.disabled = entries.length === 0;
+    clearCartButton.classList.toggle("invisible", entries.length === 0);
+    clearCartButton.setAttribute(
+      "aria-label",
+      entries.length === 0 ? "La venta está vacía" : "Vaciar venta",
+    );
+  }
   const hasCustomer = Boolean(
     byId<HTMLInputElement>("selected-customer-id")?.value,
   );
@@ -1566,7 +1630,8 @@ function renderCart(): void {
       entries.length === 0 ||
       !hasCustomer ||
       !initialPaymentValid ||
-      !discountValid;
+      !discountValid ||
+      !desiredTotalValid;
     completeButton.textContent = editingSaleId
       ? "Guardar cambios de venta"
       : "Completar venta";
@@ -1575,6 +1640,8 @@ function renderCart(): void {
   if (requirements) {
     requirements.textContent = !discountValid
       ? "El descuento debe estar entre 0% y 100%."
+      : !desiredTotalValid
+        ? "El total deseado debe coincidir con el total de la venta y no superar el subtotal con descuentos por producto."
       : !hasCustomer
       ? "Selecciona un cliente para completar la venta."
       : entries.length === 0
@@ -1709,7 +1776,7 @@ function renderSales(): void {
       <td class="text-xs text-slate-500">${dateTime.format(sale.date)}</td>
       <td class="text-slate-600">${sale.items.reduce((sum, item) => sum + item.quantity, 0)} artículos</td>
       <td><span class="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">${escapeHtml(sale.payment)}</span></td>
-      <td class="text-right"><strong class="font-bold text-slate-700">${currency.format(sale.total)}</strong>${sale.discountPercentage > 0 ? `<small class="block text-[10px] font-medium text-rose-600">−${sale.discountPercentage}% · ${currency.format(sale.discountAmount)}</small>` : ""}</td>
+      <td class="text-right"><strong class="font-bold text-slate-700">${currency.format(sale.total)}</strong>${sale.items.some((item) => item.discountAmount > 0) ? `<small class="block text-[10px] font-medium text-rose-600">Descuentos por producto · ${currency.format(sale.items.reduce((sum, item) => sum + item.discountAmount, 0))}</small>` : ""}${sale.discountPercentage > 0 ? `<small class="block text-[10px] font-medium text-rose-600">Descuento general (${sale.discountPercentage}%) · ${currency.format(sale.discountAmount)}</small>` : ""}</td>
       <td>
         <div class="flex items-center justify-end gap-1">
         ${sale.payment === "Crédito" ? '<button class="sale-action cursor-not-allowed opacity-45" type="button" disabled title="Las ventas a crédito no se pueden editar">No editable</button>' : `<button class="sale-action" data-sale-edit="${escapeHtml(sale.id)}">Editar</button>`}
@@ -1776,7 +1843,7 @@ function renderSalesStats(): void {
         total: 0,
       };
       product.quantity += item.quantity;
-      product.total += item.quantity * item.price;
+      product.total += item.quantity * item.price - item.discountAmount;
       productMap.set(productName, product);
     }
   }
@@ -1880,8 +1947,9 @@ function exportSalesCsv(): void {
     "Productos",
     "Unidades",
     "Subtotal",
-    "Descuento (%)",
-    "Descuento ($)",
+    "Descuento productos ($)",
+    "Descuento general (%)",
+    "Descuento general ($)",
     "Total",
   ];
   const rows = filtered.map((sale) => [
@@ -1895,7 +1963,10 @@ function exportSalesCsv(): void {
       .join(" | "),
     sale.items.reduce((sum, item) => sum + item.quantity, 0),
     sale.subtotal.toFixed(2),
-    sale.discountPercentage.toFixed(2),
+    sale.items
+      .reduce((sum, item) => sum + item.discountAmount, 0)
+      .toFixed(2),
+    sale.discountPercentage.toFixed(6),
     sale.discountAmount.toFixed(2),
     sale.total.toFixed(2),
   ]);
@@ -1932,15 +2003,16 @@ function receiptMarkup(sale: Sale): string {
         .map(
           (item) => `
         <div class="receipt-line">
-          <span>${escapeHtml(item.name)} · ${escapeHtml(item.size)}<small>${currency.format(item.price)} c/u</small></span>
+          <span>${escapeHtml(item.name)} · ${escapeHtml(item.size)}<small>${currency.format(item.price)} c/u${item.discountPercentage > 0 ? ` · −${item.discountPercentage}%` : ""}</small></span>
           <span>${item.quantity}</span>
-          <strong>${currency.format(item.quantity * item.price)}</strong>
+          <strong>${currency.format(item.quantity * item.price - item.discountAmount)}</strong>
         </div>`,
         )
         .join("")}
     </div>
     <div class="receipt-total"><span>Subtotal</span><strong>${currency.format(sale.subtotal)}</strong></div>
-    ${sale.discountPercentage > 0 ? `<div class="receipt-total"><span>Descuento (${sale.discountPercentage}%)</span><strong>−${currency.format(sale.discountAmount)}</strong></div>` : ""}
+    ${sale.items.some((item) => item.discountAmount > 0) ? `<div class="receipt-total"><span>Descuento por productos</span><strong>−${currency.format(sale.items.reduce((sum, item) => sum + item.discountAmount, 0))}</strong></div>` : ""}
+    ${sale.discountPercentage > 0 ? `<div class="receipt-total"><span>Descuento general (${sale.discountPercentage}%)</span><strong>−${currency.format(sale.discountAmount)}</strong></div>` : ""}
     <div class="receipt-total"><span>Total</span><strong>${currency.format(sale.total)}</strong></div>
     <p class="receipt-thanks">Gracias por tu compra</p>`;
 }
@@ -1965,11 +2037,12 @@ function showSaleConfirmation(sale: Sale): void {
       <div class="overflow-hidden rounded-xl border border-[#edf0ec]">
         <div class="flex items-center justify-between bg-[#fafbf9] px-4 py-3 text-[10px] font-bold uppercase tracking-wide text-slate-400"><span>Productos · ${itemCount} artículos</span><span>Importe</span></div>
         <div class="divide-y divide-[#edf0ec] px-4">
-          ${sale.items.map((item) => `<div class="flex items-center justify-between gap-4 py-3 text-sm"><span class="min-w-0"><span class="font-semibold text-slate-700">${escapeHtml(item.name)} · ${escapeHtml(item.size)}</span><span class="ml-2 text-xs text-slate-400">× ${item.quantity} ${item.presentation === "CAJA" ? `caja(s) de ${item.unitsPerPresentation}` : "unidad(es)"}</span></span><span class="shrink-0 font-semibold text-slate-700">${currency.format(item.quantity * item.price)}</span></div>`).join("")}
+        ${sale.items.map((item) => `<div class="flex items-center justify-between gap-4 py-3 text-sm"><span class="min-w-0"><span class="font-semibold text-slate-700">${escapeHtml(item.name)} · ${escapeHtml(item.size)}</span><span class="ml-2 text-xs text-slate-400">× ${item.quantity} ${item.presentation === "CAJA" ? `caja(s) de ${item.unitsPerPresentation}` : "unidad(es)"}${item.discountPercentage > 0 ? ` · −${item.discountPercentage}%` : ""}</span></span><span class="shrink-0 font-semibold text-slate-700">${currency.format(item.quantity * item.price - item.discountAmount)}</span></div>`).join("")}
         </div>
         <div class="space-y-2 border-t border-[#edf0ec] bg-[#fafbf9] px-4 py-4">
           <div class="flex items-center justify-between text-xs text-slate-500"><span>Subtotal</span><span>${currency.format(sale.subtotal)}</span></div>
-          ${sale.discountPercentage > 0 ? `<div class="flex items-center justify-between text-xs font-semibold text-rose-600"><span>Descuento (${sale.discountPercentage}%)</span><span>−${currency.format(sale.discountAmount)}</span></div>` : ""}
+          ${sale.items.some((item) => item.discountAmount > 0) ? `<div class="flex items-center justify-between text-xs font-semibold text-rose-600"><span>Descuento por productos</span><span>−${currency.format(sale.items.reduce((sum, item) => sum + item.discountAmount, 0))}</span></div>` : ""}
+          ${sale.discountPercentage > 0 ? `<div class="flex items-center justify-between text-xs font-semibold text-rose-600"><span>Descuento general (${sale.discountPercentage}%)</span><span>−${currency.format(sale.discountAmount)}</span></div>` : ""}
           <div class="flex items-center justify-between"><span class="text-sm font-bold text-slate-600">Total</span><strong class="text-lg font-bold text-blue-700">${currency.format(sale.total)}</strong></div>
           ${credit ? `<div class="flex items-center justify-between text-xs"><span>Abono al entregar · ${escapeHtml(String(sale.paymentMethodInitial ?? "Efectivo"))}</span><strong>${currency.format(sale.paid ?? 0)}</strong></div><div class="flex items-center justify-between text-sm font-bold text-rose-700"><span>Deuda pendiente</span><strong>${currency.format(sale.debt ?? sale.total)}</strong></div>` : ""}
         </div>
@@ -2086,16 +2159,19 @@ function downloadSaleReceipt(sale: Sale): void {
     pdf.setFontSize(8);
     pdf.setTextColor(135, 146, 139);
     pdf.text(
-      `${currency.format(item.price)} c/u`,
+      `${currency.format(item.price)} c/u${item.discountPercentage > 0 ? ` · -${item.discountPercentage}%` : ""}`,
       margin + 3,
       y + nameLines.length * 4,
     );
     pdf.setFontSize(10);
     pdf.setTextColor(52, 65, 57);
     pdf.text(String(item.quantity), right - 38, y, { align: "center" });
-    pdf.text(currency.format(item.quantity * item.price), right - 3, y, {
-      align: "right",
-    });
+    pdf.text(
+      currency.format(item.quantity * item.price - item.discountAmount),
+      right - 3,
+      y,
+      { align: "right" },
+    );
 
     y += rowHeight + 5;
     pdf.setDrawColor(237, 240, 236);
@@ -2108,10 +2184,22 @@ function downloadSaleReceipt(sale: Sale): void {
   pdf.setTextColor(113, 128, 120);
   pdf.text("Subtotal", margin + 3, y);
   pdf.text(currency.format(sale.subtotal), right - 3, y, { align: "right" });
+  const productDiscountAmount = sale.items.reduce(
+    (sum, item) => sum + item.discountAmount,
+    0,
+  );
+  if (productDiscountAmount > 0) {
+    y += 6;
+    pdf.setTextColor(190, 60, 75);
+    pdf.text("Descuento por productos", margin + 3, y);
+    pdf.text(`-${currency.format(productDiscountAmount)}`, right - 3, y, {
+      align: "right",
+    });
+  }
   if (sale.discountPercentage > 0) {
     y += 6;
     pdf.setTextColor(190, 60, 75);
-    pdf.text(`Descuento (${sale.discountPercentage}%)`, margin + 3, y);
+    pdf.text(`Descuento general (${sale.discountPercentage}%)`, margin + 3, y);
     pdf.text(`-${currency.format(sale.discountAmount)}`, right - 3, y, {
       align: "right",
     });
@@ -2195,6 +2283,10 @@ function renderCustomers(selectedId?: number): void {
     search.classList.toggle("hidden", Boolean(selected));
     search.setAttribute("aria-expanded", "false");
   }
+  byId("customer-picker")?.classList.toggle(
+    "has-selected-customer",
+    Boolean(selected),
+  );
   const results = byId("customer-results");
   results?.classList.add("hidden");
   renderCart();
@@ -2340,7 +2432,12 @@ function setMobileCartOpen(open: boolean): void {
 
   cartPanel.classList.toggle("is-open", open);
   toggle.setAttribute("aria-expanded", String(open));
-  toggle.textContent = open ? "Cerrar carrito" : "Ver carrito";
+  toggle.setAttribute("aria-label", open ? "Cerrar venta" : "Ver venta");
+  toggle.title = open ? "Cerrar venta" : "Ver venta";
+  byId<HTMLButtonElement>("cart-sheet-handle")?.setAttribute(
+    "aria-expanded",
+    String(open),
+  );
   backdrop.hidden = !open;
 }
 
@@ -2868,6 +2965,41 @@ byId("category-filter")?.addEventListener("change", renderProducts);
 byId("pos-search")?.addEventListener("input", renderPos);
 byId("payment-method")?.addEventListener("change", renderCart);
 byId("sale-discount")?.addEventListener("input", renderCart);
+byId("sale-total-desired")?.addEventListener("input", (event) => {
+  const input = event.currentTarget as HTMLInputElement;
+  let subtotal = 0;
+  let productDiscount = 0;
+  for (const [key, quantity] of cart) {
+    const { variantId, presentation } = parseCartKey(key);
+    const item = variantFor(variantId);
+    if (!item) continue;
+    const lineSubtotal =
+      presentationPrice(item.product, presentation, item.variant) * quantity;
+    subtotal += lineSubtotal;
+    productDiscount +=
+      Math.round(
+        lineSubtotal * (cartProductDiscounts.get(key) ?? 0),
+      ) / 100;
+  }
+  const subtotalAfterProductDiscount =
+    Math.round((subtotal - productDiscount) * 100) / 100;
+  const desiredTotal = Number(input.value);
+  if (
+    input.value.trim() !== "" &&
+    Number.isFinite(desiredTotal) &&
+    desiredTotal >= 0 &&
+    desiredTotal <= subtotalAfterProductDiscount
+  ) {
+    const percentage = subtotalAfterProductDiscount
+      ? ((subtotalAfterProductDiscount - desiredTotal) /
+          subtotalAfterProductDiscount) *
+        100
+      : 0;
+    const discount = byId<HTMLInputElement>("sale-discount");
+    if (discount) discount.value = percentage.toFixed(6);
+  }
+  renderCart();
+});
 byId("initial-payment-amount")?.addEventListener("input", renderCart);
 byId("customer-search")?.addEventListener("input", (event) => {
   renderCustomerResults((event.currentTarget as HTMLInputElement).value);
@@ -3065,6 +3197,7 @@ document.addEventListener("click", async (event) => {
       search.classList.remove("hidden");
       search.focus();
     }
+    byId("customer-picker")?.classList.remove("has-selected-customer");
     byId("selected-customer")?.classList.add("hidden");
     renderCart();
     renderCustomerResults("");
@@ -3288,12 +3421,14 @@ document.addEventListener("click", async (event) => {
       if (!product) editedProductSnapshots.set(item.productId, snapshot);
     }
     cart.clear();
-    sale.items.forEach((item) =>
-      cart.set(
-        cartKey(item.variantId, item.presentation ?? "UNIDAD"),
-        item.quantity,
-      ),
-    );
+    cartProductDiscounts.clear();
+    sale.items.forEach((item) => {
+      const key = cartKey(item.variantId, item.presentation ?? "UNIDAD");
+      cart.set(key, item.quantity);
+      if (item.discountPercentage > 0) {
+        cartProductDiscounts.set(key, item.discountPercentage);
+      }
+    });
     renderCustomers(sale.customerId);
     const payment = byId<HTMLSelectElement>("payment-method");
     if (payment) payment.value = sale.payment;
@@ -3308,6 +3443,26 @@ document.addEventListener("click", async (event) => {
 byId("cart-items")?.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+    return;
+  }
+  const productDiscountInput = target.closest<HTMLInputElement>(
+    "[data-cart-product-discount]",
+  );
+  if (productDiscountInput) {
+    const key = productDiscountInput.dataset.cartProductDiscount ?? "";
+    const percentage = Number(productDiscountInput.value);
+    if (
+      !Number.isFinite(percentage) ||
+      percentage < 0 ||
+      percentage > 100
+    ) {
+      notify("El descuento del producto debe estar entre 0% y 100%.");
+      renderCart();
+      return;
+    }
+    if (percentage > 0) cartProductDiscounts.set(key, percentage);
+    else cartProductDiscounts.delete(key);
+    renderCart();
     return;
   }
   const quantityInput = target.closest<HTMLInputElement>(
@@ -3362,17 +3517,57 @@ byId("cart-items")?.addEventListener("change", (event) => {
   }
   cart.delete(previousKey);
   cart.set(nextKey, mergedQuantity);
+  const productDiscount = cartProductDiscounts.get(previousKey);
+  cartProductDiscounts.delete(previousKey);
+  if (productDiscount !== undefined && !cartProductDiscounts.has(nextKey)) {
+    cartProductDiscounts.set(nextKey, productDiscount);
+  }
   renderCart();
 });
 
 byId("clear-cart")?.addEventListener("click", () => {
+  if (cart.size === 0) return;
+  byId<HTMLDialogElement>("clear-sale-modal")?.showModal();
+});
+
+byId("confirm-clear-sale")?.addEventListener("click", () => {
   cart.clear();
+  cartProductDiscounts.clear();
+  byId<HTMLInputElement>("sale-discount")!.value = "0";
   renderCart();
+  byId<HTMLDialogElement>("clear-sale-modal")?.close();
+  notify("Venta vaciada.");
 });
 
 byId("toggle-cart")?.addEventListener("click", () => {
   const open = byId("sale-cart")?.classList.contains("is-open") ?? false;
   setMobileCartOpen(!open);
+});
+
+let cartSheetPointerStartY: number | null = null;
+const cartSheetHandle = byId<HTMLButtonElement>("cart-sheet-handle");
+cartSheetHandle?.addEventListener("pointerdown", (event) => {
+  if (window.matchMedia("(min-width: 1280px)").matches) return;
+  cartSheetPointerStartY = event.clientY;
+  cartSheetHandle.setPointerCapture(event.pointerId);
+});
+cartSheetHandle?.addEventListener("pointerup", (event) => {
+  if (cartSheetPointerStartY === null) return;
+  const distance = event.clientY - cartSheetPointerStartY;
+  cartSheetPointerStartY = null;
+  if (Math.abs(distance) < 32) return;
+  event.preventDefault();
+  setMobileCartOpen(distance < 0);
+});
+cartSheetHandle?.addEventListener("pointercancel", () => {
+  cartSheetPointerStartY = null;
+});
+cartSheetHandle?.addEventListener("click", (event) => {
+  if (event.detail !== 0 || window.matchMedia("(min-width: 1280px)").matches) {
+    return;
+  }
+  const isOpen = byId("sale-cart")?.classList.contains("is-open") ?? false;
+  setMobileCartOpen(!isOpen);
 });
 
 byId<HTMLButtonElement>("cart-backdrop")?.addEventListener("click", () => {
@@ -3387,10 +3582,23 @@ window.addEventListener("resize", () => {
   if (window.innerWidth >= 1280) setMobileCartOpen(false);
 });
 
+byId("cart-items")?.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const removeButton = target.closest<HTMLButtonElement>("[data-cart-remove]");
+  if (!removeButton) return;
+  const key = removeButton.dataset.cartRemove;
+  if (!key || !cart.has(key)) return;
+  cart.delete(key);
+  cartProductDiscounts.delete(key);
+  renderCart();
+});
+
 byId("cancel-edit-sale")?.addEventListener("click", () => {
   editingSaleId = null;
   editedProductSnapshots.clear();
   cart.clear();
+  cartProductDiscounts.clear();
   byId<HTMLInputElement>("sale-discount")!.value = "0";
   renderCustomers();
   switchView("pos");
@@ -3456,6 +3664,7 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
           varianteId: item.variantId,
           cantidad: item.quantity,
           presentacion: item.presentation,
+          descuentoPorcentaje: item.discountPercentage,
         })),
       }),
     });
@@ -3480,6 +3689,7 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
   editingSaleId = null;
   editedProductSnapshots.clear();
   cart.clear();
+  cartProductDiscounts.clear();
   byId<HTMLInputElement>("sale-discount")!.value = "0";
   byId<HTMLDialogElement>("sale-confirm-modal")?.close();
   try {
@@ -3539,12 +3749,26 @@ byId("complete-sale")?.addEventListener("click", () => {
         presentation,
         item.variant,
       ),
-    });
-  }
-  const subtotal = Math.round(items.reduce(
-    (sum, item) => sum + item.quantity * item.price,
+        discountPercentage: cartProductDiscounts.get(key) ?? 0,
+        discountAmount: 0,
+      });
+    }
+    for (const item of items) {
+      item.discountAmount =
+        Math.round(
+          item.quantity * item.price * item.discountPercentage,
+        ) / 100;
+    }
+    const subtotal = Math.round(items.reduce(
+      (sum, item) => sum + item.quantity * item.price,
     0,
-  ) * 100) / 100;
+    ) * 100) / 100;
+    const subtotalAfterProductDiscount =
+      Math.round(
+        (subtotal -
+          items.reduce((sum, item) => sum + item.discountAmount, 0)) *
+          100,
+      ) / 100;
   const discountPercentage = Number(
     byId<HTMLInputElement>("sale-discount")?.value ?? 0,
   );
@@ -3556,8 +3780,10 @@ byId("complete-sale")?.addEventListener("click", () => {
     notify("El descuento debe estar entre 0% y 100%.");
     return;
   }
-  const discountAmount = Math.round(subtotal * discountPercentage) / 100;
-  const total = Math.round((subtotal - discountAmount) * 100) / 100;
+  const discountAmount =
+    Math.round(subtotalAfterProductDiscount * discountPercentage) / 100;
+  const total =
+    Math.round((subtotalAfterProductDiscount - discountAmount) * 100) / 100;
   const payment = byId<HTMLSelectElement>("payment-method")?.value ?? "Efectivo";
   const initialPayment =
     payment === "Crédito"

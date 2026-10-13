@@ -1,19 +1,12 @@
 <section id="view-pos" class="app-view hidden space-y-6">
   <div class="flex items-end justify-between gap-4">
     <div>
-      <p class="text-sm text-slate-500">Selecciona productos y prepara el cobro</p>
-      <h2
-        id="pos-title"
-        class="mt-1 text-2xl font-bold tracking-tight"
-      >
+      <!-- <p class="text-sm text-slate-500">Agrega productos, revisa la venta y registra el cobro</p> -->
+      <h2 id="pos-title" class="mt-1 text-2xl font-bold tracking-tight">
         Punto de venta
       </h2>
     </div>
-    <button
-      id="cancel-edit-sale"
-      class="secondary-button hidden"
-      type="button"
-    >
+    <button id="cancel-edit-sale" class="secondary-button hidden" type="button">
       Cancelar edición
     </button>
   </div>
@@ -21,9 +14,8 @@
   <button
     id="cart-backdrop"
     type="button"
-    aria-label="Cerrar carrito"
-    hidden
-  ></button>
+    aria-label="Cerrar detalle de venta"
+    hidden></button>
 
   <div class="pos-layout">
     <article class="panel-card pos-products-panel overflow-hidden">
@@ -32,8 +24,16 @@
           Escanear código de barras
           <span class="search-field mt-1.5">
             <span class="search-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                <path stroke-linecap="round" d="M4 7V5h2m12 0h2v2M4 17v2h2m12 0h2v-2M7 5v14m3-14v14m4-14v14m3-14v14"></path>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  stroke-linecap="round"
+                  d="M4 7V5h2m12 0h2v2M4 17v2h2m12 0h2v-2M7 5v14m3-14v14m4-14v14m3-14v14"
+                ></path>
               </svg>
             </span>
             <input
@@ -48,7 +48,12 @@
         </label>
         <label class="search-field">
           <span class="search-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+            >
               <circle cx="10.8" cy="10.8" r="6.8"></circle>
               <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
             </svg>
@@ -64,8 +69,15 @@
         <div id="category-chips" class="flex gap-2 overflow-x-auto pb-1"></div>
       </div>
       <div class="pos-product-list scrollbar-thin">
-        <div id="pos-products" class="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3"></div>
-        <p id="pos-empty" class="hidden px-6 py-12 text-center text-sm text-slate-500">
+        <div
+          id="pos-products"
+          class="grid gap-3 p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-3"
+        >
+        </div>
+        <p
+          id="pos-empty"
+          class="hidden px-6 py-12 text-center text-sm text-slate-500"
+        >
           No hay productos disponibles para esta búsqueda.
         </p>
       </div>
@@ -73,10 +85,17 @@
 
     <aside id="sale-cart" class="panel-card pos-cart">
       <div class="panel-heading">
+        <button
+          id="cart-sheet-handle"
+          class="pos-cart-handle"
+          type="button"
+          aria-label="Desliza para abrir o cerrar el detalle de la venta"
+          aria-controls="cart-content"
+          aria-expanded="false"></button>
         <div>
-          <h3 class="panel-title">Venta actual</h3>
+          <h3 class="panel-title">Detalle de la venta</h3>
           <p class="panel-caption">
-            <span id="cart-count">0</span> artículos
+            <span id="cart-count">0</span> unidades
             <span aria-hidden="true"> · </span>
             <span id="cart-peek-total">$0.00</span>
           </p>
@@ -84,19 +103,28 @@
         <div class="flex items-center gap-2">
           <button
             id="toggle-cart"
-            class="pos-cart-toggle secondary-button min-h-9 px-3"
+            class="pos-cart-toggle sale-icon-button"
             type="button"
             aria-controls="cart-content"
             aria-expanded="false"
+            aria-label="Ver venta"
+            title="Ver venta"
           >
-            Ver carrito
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m6 15 6-6 6 6"></path>
+            </svg>
           </button>
           <button
             id="clear-cart"
-            class="text-xs font-semibold text-slate-400 hover:text-rose-600"
+            class="sale-icon-button sale-icon-button--remove"
             type="button"
+            aria-label="Vaciar venta"
+            title="Vaciar venta"
+            disabled
           >
-            Vaciar
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16m-10 4v6m4-6v6M5 7l1 13h12l1-13M9 7V4h6v3"></path>
+            </svg>
           </button>
         </div>
       </div>
@@ -104,94 +132,135 @@
       <div id="cart-content">
         <div
           id="cart-items"
-          class="scrollbar-thin max-h-[340px] divide-y divide-[#edf0ec] overflow-y-auto px-5"
-        ></div>
+          class="scrollbar-thin max-h-85 space-y-2 overflow-y-auto px-4 pt-3"
+        >
+        </div>
         <div
           id="cart-empty"
-          class="px-5 pb-5 text-center text-sm text-slate-400"
+          class="px-5 pb-5 pt-3 text-center text-sm text-slate-400"
         >
-          Agrega productos para comenzar.
+          Busca o escanea un producto para agregarlo a esta venta.
         </div>
         <div class="space-y-3 border-t border-[#edf0ec] bg-[#fafbf9] p-5">
-          <div>
-            <div class="mb-1.5 flex items-center justify-between gap-2">
-              <label for="customer-search" class="text-xs font-semibold text-slate-600">
-                Cliente <span class="text-rose-600">*</span>
-              </label>
-              <button
-                id="open-customer-modal"
-                type="button"
-                class="text-[11px] font-semibold text-blue-700 hover:underline"
-              >
-                ＋ Nuevo cliente
-              </button>
+          <div class="sale-controls-grid">
+            <div class="sale-control min-w-0">
+              <div class="sale-control-heading">
+                <label
+                  for="customer-search"
+                  class="text-xs font-semibold text-slate-600"
+                >
+                  Cliente <span class="text-rose-600">*</span>
+                </label>
+                <button
+                  id="open-customer-modal"
+                  type="button"
+                  class="shrink-0 text-[10px] font-semibold text-blue-700 hover:underline"
+                >
+                  ＋ Nuevo
+                </button>
+              </div>
+              <div id="customer-picker" class="customer-picker">
+                <label class="search-field">
+                  <span class="search-icon" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                    >
+                      <circle cx="10.8" cy="10.8" r="6.8"></circle>
+                      <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
+                    </svg>
+                  </span>
+                  <input
+                    id="customer-search"
+                    class="search-input"
+                    type="search"
+                    role="combobox"
+                    aria-label="Buscar cliente"
+                    aria-autocomplete="list"
+                    aria-controls="customer-results"
+                    aria-expanded="false"
+                    placeholder="Nombre o teléfono..."
+                    autocomplete="off"
+                  />
+                </label>
+                <input id="selected-customer-id" type="hidden" />
+                <div id="selected-customer" class="selected-customer hidden">
+                </div>
+                <div
+                  id="customer-results"
+                  class="customer-results hidden"
+                  role="listbox"
+                >
+                </div>
+              </div>
             </div>
-            <div id="customer-picker" class="customer-picker">
-              <label class="search-field">
-                <span class="search-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <circle cx="10.8" cy="10.8" r="6.8"></circle>
-                    <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
-                  </svg>
-                </span>
-                <input
-                  id="customer-search"
-                  class="search-input"
-                  type="search"
-                  role="combobox"
-                  aria-label="Buscar cliente"
-                  aria-autocomplete="list"
-                  aria-controls="customer-results"
-                  aria-expanded="false"
-                  placeholder="Buscar por nombre o teléfono..."
-                  autocomplete="off"
-                />
-              </label>
-              <input id="selected-customer-id" type="hidden" />
-              <div id="selected-customer" class="selected-customer hidden"></div>
-              <div id="customer-results" class="customer-results hidden" role="listbox"></div>
-            </div>
+            <label class="sale-control block min-w-0 text-xs font-semibold text-slate-600">
+              <span class="sale-control-heading">Descuento (%)</span>
+              <input
+                id="sale-discount"
+                class="form-input mt-1.5 w-full"
+                type="number"
+                min="0"
+                max="100"
+                step="0.000001"
+                value="0"
+              />
+            </label>
+            <label class="sale-control block min-w-0 text-xs font-semibold text-slate-600">
+              <span class="sale-control-heading">Total a cobrar ($)</span>
+              <input
+                id="sale-total-desired"
+                class="form-input mt-1.5 w-full"
+                type="number"
+                min="0"
+                step="0.01"
+                value="0.00"
+              />
+              <span class="mt-1 block font-normal text-slate-400">
+                Calcula el descuento general.
+              </span>
+            </label>
+            <label class="sale-control block min-w-0 text-xs font-semibold text-slate-600">
+              <span class="sale-control-heading">Método de pago</span>
+              <select id="payment-method" class="select-input mt-1.5 w-full">
+                <option value="Efectivo">Efectivo</option>
+                <option value="Transferencia">Transferencia</option>
+                <option value="Tarjeta">Tarjeta</option>
+                <option value="Crédito">Crédito</option>
+              </select>
+            </label>
           </div>
           <div class="flex items-center justify-between text-sm text-slate-500">
             <span>Subtotal</span><span id="cart-subtotal">$0.00</span>
           </div>
-          <label class="block text-xs font-semibold text-slate-600">
-            Descuento (%)
-            <input
-              id="sale-discount"
-              class="form-input mt-1.5 w-full"
-              type="number"
-              min="0"
-              max="100"
-              step="0.01"
-              value="0"
-            />
-          </label>
+          <div
+            id="cart-product-discount-row"
+            class="hidden items-center justify-between text-sm text-rose-600"
+          >
+            <span>Descuento por productos</span>
+            <span id="cart-product-discount">$0.00</span>
+          </div>
           <div
             id="cart-discount-row"
-            class="hidden flex items-center justify-between text-sm text-rose-600"
+            class="hidden items-center justify-between text-sm text-rose-600"
           >
             <span id="cart-discount-label">Descuento</span>
             <span id="cart-discount">$0.00</span>
           </div>
-          <div class="flex items-center justify-between text-base font-bold text-[#19241e]">
+          <div
+            class="flex items-center justify-between text-base font-bold text-[#19241e]"
+          >
             <span>Total</span><span id="cart-total">$0.00</span>
           </div>
-          <label class="block text-xs font-semibold text-slate-600">
-            Método de pago
-            <select id="payment-method" class="select-input mt-1.5 w-full">
-              <option value="Efectivo">Efectivo</option>
-              <option value="Transferencia">Transferencia</option>
-              <option value="Tarjeta">Tarjeta</option>
-              <option value="Crédito">Crédito</option>
-            </select>
-          </label>
           <div
             id="credit-initial-payment"
             class="hidden space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3"
           >
             <p class="text-xs font-semibold text-amber-900">
-              El cliente recibe ahora los productos y el saldo quedará como deuda.
+              El cliente recibe ahora los productos y el saldo quedará como
+              deuda.
             </p>
             <label class="block text-xs font-semibold text-slate-600">
               Abono inicial ($)
@@ -206,7 +275,10 @@
             </label>
             <label class="block text-xs font-semibold text-slate-600">
               Método del abono
-              <select id="initial-payment-method" class="select-input mt-1.5 w-full">
+              <select
+                id="initial-payment-method"
+                class="select-input mt-1.5 w-full"
+              >
                 <option value="Efectivo">Efectivo</option>
                 <option value="Transferencia">Transferencia</option>
                 <option value="Tarjeta">Tarjeta</option>
@@ -220,7 +292,10 @@
           >
             Completar venta
           </button>
-          <p id="sale-requirements" class="text-center text-[10px] text-slate-400">
+          <p
+            id="sale-requirements"
+            class="text-center text-[10px] text-slate-400"
+          >
             Selecciona un cliente y agrega productos para continuar.
           </p>
         </div>
