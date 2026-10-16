@@ -89,6 +89,7 @@
       <label class="form-label">Producto y talla<select id="movement-product" class="form-input" name="variantId" required></select></label>
       <label class="form-label">Tipo de movimiento<select class="form-input" name="type"><option value="Ingreso">Ingreso</option><option value="Salida">Salida</option></select></label>
       <label class="form-label">Cantidad<input class="form-input" name="quantity" type="number" min="1" step="1" required placeholder="1" /></label>
+      <label id="movement-description-field" class="form-label hidden">Descripción de la salida (opcional)<textarea class="form-input min-h-24 resize-y" name="description" maxlength="500" placeholder="Indica el motivo o destino de la salida"></textarea></label>
     </div>
     <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="movement-modal">Cancelar</button><button type="submit" class="primary-button">Guardar movimiento</button></div>
   </form>

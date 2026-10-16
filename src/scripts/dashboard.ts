@@ -51,6 +51,7 @@ interface Movement {
   date: Date;
   user: string;
   productName?: string;
+  description?: string | null;
 }
 
 interface SaleLine {
@@ -243,7 +244,9 @@ function presentationPrice(
 }
 
 function productPriceLabel(product: Product): string {
-  const prices = product.variants.map((variant) => variant.price ?? product.price);
+  const prices = product.variants.map(
+    (variant) => variant.price ?? product.price,
+  );
   if (!prices.length) return currency.format(product.price);
   const minimum = Math.min(...prices);
   const maximum = Math.max(...prices);
@@ -420,13 +423,17 @@ async function loadInventoryDataGroup(
           inventoryRequest<Array<Omit<Product, "tone" | "initials">>>(
             productPath,
           ),
-          inventoryRequest<
-            Array<Omit<Sale, "date"> & { date: string | Date }>
-          >("/ventas"),
+          inventoryRequest<Array<Omit<Sale, "date"> & { date: string | Date }>>(
+            "/ventas",
+          ),
         ]);
         if (generation !== inventoryDataGeneration || currentUser !== user)
           return;
-        products.splice(0, products.length, ...productosApi.map(normalizedProduct));
+        products.splice(
+          0,
+          products.length,
+          ...productosApi.map(normalizedProduct),
+        );
         sales.splice(
           0,
           sales.length,
@@ -658,7 +665,13 @@ function renderSummary(): void {
               product,
             ) => `<div class="flex items-center gap-3 rounded-xl px-1 py-3">
           <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold">${escapeHtml(product.initials)}</div>
-          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Revisar: ${product.variants.filter((variant) => variant.stock <= variant.minStock).map((variant) => `${escapeHtml(variantLabel(variant))} (mín. ${variant.minStock})`).join(", ")}</p></div>
+          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Revisar: ${product.variants
+            .filter((variant) => variant.stock <= variant.minStock)
+            .map(
+              (variant) =>
+                `${escapeHtml(variantLabel(variant))} (mín. ${variant.minStock})`,
+            )
+            .join(", ")}</p></div>
           <span class="rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700">${product.stock} uds.</span>
         </div>`,
           )
@@ -686,7 +699,7 @@ function renderMovements(): void {
               .toUpperCase(),
           };
         return `<tr>
-      <td><div class="flex items-center gap-3"><span class="hidden h-8 w-8 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold sm:flex">${escapeHtml(product.initials)}</span><span class="font-semibold text-slate-700">${escapeHtml(product.name)} · ${escapeHtml(movement.size)}</span></div></td>
+      <td><div class="flex items-center gap-3"><span class="hidden h-8 w-8 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold sm:flex">${escapeHtml(product.initials)}</span><span class="min-w-0"><span class="block font-semibold text-slate-700">${escapeHtml(product.name)} · ${escapeHtml(movement.size)}</span>${movement.type === "Salida" && movement.description ? `<span class="mt-0.5 block max-w-md truncate text-xs font-normal text-slate-500" title="${escapeHtml(movement.description)}">${escapeHtml(movement.description)}</span>` : ""}</span></div></td>
       <td>${movementBadge(movement.type)}</td>
       <td class="text-right font-semibold ${movement.type === "Ingreso" ? "text-emerald-700" : "text-slate-600"}">${movement.type === "Ingreso" ? "+" : "−"}${movement.quantity}</td>
       ${
@@ -743,12 +756,14 @@ function renderTallas(): void {
 function renderColores(): void {
   const list = byId("colores-list");
   if (list) {
-    list.innerHTML = colors
-      .map(
-        (color) =>
-          `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(color.nombre)}</span><span class="flex gap-3"><button type="button" class="text-xs font-semibold text-blue-700" data-color-edit="${color.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-color-delete="${color.id}">Eliminar</button></span></li>`,
-      )
-      .join("") || '<li class="text-xs text-slate-400">Todavía no hay colores.</li>';
+    list.innerHTML =
+      colors
+        .map(
+          (color) =>
+            `<li class="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700"><span>${escapeHtml(color.nombre)}</span><span class="flex gap-3"><button type="button" class="text-xs font-semibold text-blue-700" data-color-edit="${color.id}">Editar</button><button type="button" class="text-xs font-semibold text-rose-600" data-color-delete="${color.id}">Eliminar</button></span></li>`,
+        )
+        .join("") ||
+      '<li class="text-xs text-slate-400">Todavía no hay colores.</li>';
   }
 }
 
@@ -773,8 +788,8 @@ function resetColorForm(): void {
 }
 
 function collectProductVariantDrafts(): ProductVariant[] {
-  const basePriceField = byId<HTMLFormElement>("product-form")?.elements
-    .namedItem("price");
+  const basePriceField =
+    byId<HTMLFormElement>("product-form")?.elements.namedItem("price");
   const basePrice =
     basePriceField instanceof HTMLInputElement ? basePriceField.value : "0";
   return [
@@ -783,9 +798,9 @@ function collectProductVariantDrafts(): ProductVariant[] {
     ) ?? []),
   ].map((row) => {
     const tallaId = Number(row.dataset.variantSize);
-    const sizePrice = byId("product-size-prices")?.querySelector<HTMLInputElement>(
-      `[data-size-price="${tallaId}"]`,
-    );
+    const sizePrice = byId(
+      "product-size-prices",
+    )?.querySelector<HTMLInputElement>(`[data-size-price="${tallaId}"]`);
     return {
       id: Number(row.dataset.variantId ?? 0),
       tallaId,
@@ -798,17 +813,15 @@ function collectProductVariantDrafts(): ProductVariant[] {
         row.querySelector<HTMLInputElement>("[data-variant-stock]")?.value ?? 0,
       ),
       minStock: Number(
-        row.querySelector<HTMLInputElement>("[data-variant-min-stock]")?.value ??
-          0,
+        row.querySelector<HTMLInputElement>("[data-variant-min-stock]")
+          ?.value ?? 0,
       ),
       price: Number(sizePrice?.value ?? basePrice),
     };
   });
 }
 
-function renderProductVariantFields(
-  selectedVariants?: ProductVariant[],
-): void {
+function renderProductVariantFields(selectedVariants?: ProductVariant[]): void {
   const container = byId("product-variants");
   if (!container) return;
   const currentDrafts = selectedVariants ?? collectProductVariantDrafts();
@@ -872,9 +885,9 @@ function renderProductVariantFields(
   const unitsInput = byId<HTMLFormElement>("product-form")?.elements.namedItem(
     "unitsPerBox",
   ) as HTMLInputElement | null;
-  const boxPriceInput = byId<HTMLFormElement>("product-form")?.elements.namedItem(
-    "boxPrice",
-  ) as HTMLInputElement | null;
+  const boxPriceInput = byId<HTMLFormElement>(
+    "product-form",
+  )?.elements.namedItem("boxPrice") as HTMLInputElement | null;
   if (!isSupply && boxToggle) {
     boxToggle.checked = false;
     if (unitsInput) unitsInput.value = "";
@@ -905,17 +918,19 @@ function renderProductVariantFields(
     }
   }
   if (sizesContainer) {
-    sizesContainer.innerHTML = tallas
-      .filter((talla) => talla.nombre !== "Única")
-      .map(
-        (talla) =>
-          `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-blue-700" data-size-option="${talla.id}" ${chosenSizes.has(talla.id) ? "checked" : ""} />${escapeHtml(talla.nombre)}</label>`,
-      )
-      .join("") || '<span class="text-xs text-slate-400">Agrega tallas antes de crear una prenda.</span>';
+    sizesContainer.innerHTML =
+      tallas
+        .filter((talla) => talla.nombre !== "Única")
+        .map(
+          (talla) =>
+            `<label class="flex items-center gap-1.5 text-xs font-medium text-slate-600"><input type="checkbox" class="accent-blue-700" data-size-option="${talla.id}" ${chosenSizes.has(talla.id) ? "checked" : ""} />${escapeHtml(talla.nombre)}</label>`,
+        )
+        .join("") ||
+      '<span class="text-xs text-slate-400">Agrega tallas antes de crear una prenda.</span>';
   }
   if (sizePricesContainer) {
-    const basePriceInput = byId<HTMLFormElement>("product-form")?.elements
-      .namedItem("price");
+    const basePriceInput =
+      byId<HTMLFormElement>("product-form")?.elements.namedItem("price");
     const defaultPrice =
       basePriceInput instanceof HTMLInputElement
         ? Number(basePriceInput.value)
@@ -954,23 +969,25 @@ function renderProductVariantFields(
       const talla = tallas.find((item) => item.id === tallaId);
       const color = colors.find((item) => item.id === colorId);
       const previous = currentDrafts.find(
-        (variant) =>
-          variant.tallaId === tallaId && variant.colorId === colorId,
+        (variant) => variant.tallaId === tallaId && variant.colorId === colorId,
       );
       return { tallaId, colorId, talla, color, previous };
     }),
   );
-  container.innerHTML = variants
-    .filter((variant) => variant.tallaId > 0)
-    .map(({ tallaId, colorId, talla, color, previous }) => {
-      const label = [talla?.nombre, color?.nombre].filter(Boolean).join(" · ");
-      return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2" data-variant-row data-variant-id="${previous?.id ?? ""}" data-variant-size="${tallaId}" data-variant-color="${colorId ?? ""}" data-variant-price="${previous?.price ?? ""}" data-size-name="${escapeHtml(talla?.nombre ?? "")}" data-color-name="${escapeHtml(color?.nombre ?? "")}">
+  container.innerHTML =
+    variants
+      .filter((variant) => variant.tallaId > 0)
+      .map(({ tallaId, colorId, talla, color, previous }) => {
+        const label = [talla?.nombre, color?.nombre]
+          .filter(Boolean)
+          .join(" · ");
+        return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2" data-variant-row data-variant-id="${previous?.id ?? ""}" data-variant-size="${tallaId}" data-variant-color="${colorId ?? ""}" data-variant-price="${previous?.price ?? ""}" data-size-name="${escapeHtml(talla?.nombre ?? "")}" data-color-name="${escapeHtml(color?.nombre ?? "")}">
         <span class="text-sm font-semibold text-slate-700">${escapeHtml(label)}</span>
         <label class="text-[10px] font-medium text-slate-500">Stock<input class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-stock value="${previous?.stock ?? 0}" /></label>
         <label class="text-[10px] font-medium text-slate-500">Mínimo<input class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-min-stock value="${previous?.minStock ?? 5}" /></label>
       </div>`;
-    })
-    .join("") ||
+      })
+      .join("") ||
     `<p class="text-xs text-slate-400">${isGarment ? "Selecciona al menos una talla para configurar sus existencias." : "Selecciona colores o configura el stock de la variante única."}</p>`;
 }
 
@@ -1048,10 +1065,9 @@ function renderCustomersTable(): void {
   });
   const table = byId("customers-table");
   if (table) {
-    table.innerHTML =
-      filtered
-        .map(
-          (customer) => `<tr>
+    table.innerHTML = filtered
+      .map(
+        (customer) => `<tr>
           <td class="font-semibold text-slate-700">${escapeHtml(customer.name)}</td>
           <td>${escapeHtml(customer.phone)}</td>
           <td class="text-slate-500">${escapeHtml(customer.cedula || "—")}</td>
@@ -1065,8 +1081,8 @@ function renderCustomersTable(): void {
             </div>
           </td>
         </tr>`,
-        )
-        .join("");
+      )
+      .join("");
   }
   const empty = byId("customers-crud-empty");
   if (empty) {
@@ -1109,7 +1125,10 @@ function refreshForRealtimeChange(): void {
       }
     })
     .catch((cause: unknown) => {
-      console.error("No se pudo sincronizar el inventario en tiempo real:", cause);
+      console.error(
+        "No se pudo sincronizar el inventario en tiempo real:",
+        cause,
+      );
     })
     .finally(() => {
       realtimeRefreshInProgress = false;
@@ -1136,8 +1155,7 @@ function setRealtimeConnectionStatus(
       label: "Conectando...",
       ariaLabel: "Conectando con el servidor",
       point: "relative inline-flex h-2 w-2 rounded-full bg-slate-400",
-      ping:
-        "absolute inline-flex h-full w-full animate-ping rounded-full bg-slate-400 opacity-75",
+      ping: "absolute inline-flex h-full w-full animate-ping rounded-full bg-slate-400 opacity-75",
       text: "sr-only text-xs font-medium text-slate-500 sm:not-sr-only",
     },
     connected: {
@@ -1146,8 +1164,7 @@ function setRealtimeConnectionStatus(
       label: "Sistema conectado",
       ariaLabel: "Sistema conectado",
       point: "relative inline-flex h-2 w-2 rounded-full bg-emerald-500",
-      ping:
-        "absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75",
+      ping: "absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75",
       text: "sr-only text-xs font-medium text-emerald-700 sm:not-sr-only",
     },
     disconnected: {
@@ -1156,8 +1173,7 @@ function setRealtimeConnectionStatus(
       label: "Sin conexión",
       ariaLabel: "Sin conexión",
       point: "relative inline-flex h-2 w-2 rounded-full bg-red-500",
-      ping:
-        "absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75",
+      ping: "absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75",
       text: "sr-only text-xs font-medium text-red-700 sm:not-sr-only",
     },
   }[state];
@@ -1192,7 +1208,10 @@ function connectRealtimeUpdates(): void {
   realtimeSocket.on("pedidoActualizado", scheduleRefresh);
   realtimeSocket.on("connect_error", (cause: Error) => {
     setRealtimeConnectionStatus("disconnected");
-    console.error("No se pudo conectar a las actualizaciones en tiempo real:", cause.message);
+    console.error(
+      "No se pudo conectar a las actualizaciones en tiempo real:",
+      cause.message,
+    );
   });
 }
 
@@ -1258,7 +1277,12 @@ async function openCustomerAccount(
         <section>
           <h3 class="mb-2 text-sm font-bold text-slate-700">Ventas a crédito</h3>
           <div class="space-y-2">
-            ${account.ventas.map((venta) => `<article class="rounded-xl border border-[#edf0ec] p-3">
+            ${
+              account.ventas
+                .map(
+                  (
+                    venta,
+                  ) => `<article class="rounded-xl border border-[#edf0ec] p-3">
               <div class="flex items-start justify-between gap-3">
                 <div><p class="text-xs font-bold text-slate-700">${escapeHtml(venta.id)} · ${dateTime.format(new Date(venta.fecha))}</p>
                   <p class="mt-1 text-[11px] text-slate-500">${venta.items.map((item) => `${escapeHtml(item.nombre)} ${escapeHtml(item.talla)} × ${item.cantidad} ${item.presentacion === "CAJA" ? "(caja)" : ""}`).join(", ")}</p>
@@ -1268,7 +1292,11 @@ async function openCustomerAccount(
                   <p class="font-bold ${venta.saldo > 0 ? "text-rose-700" : "text-slate-500"}">Debe ${currency.format(venta.saldo)}</p>
                 </div>
               </div>
-            </article>`).join("") || '<p class="text-xs text-slate-400">No hay ventas a crédito registradas.</p>'}
+            </article>`,
+                )
+                .join("") ||
+              '<p class="text-xs text-slate-400">No hay ventas a crédito registradas.</p>'
+            }
           </div>
         </section>
         <section>
@@ -1279,11 +1307,15 @@ async function openCustomerAccount(
             </table>
           </div>
         </section>
-        ${account.saldoDeuda > 0 ? `<form id="customer-account-payment-form" class="grid gap-3 rounded-xl bg-[#f7f9f6] p-4 sm:grid-cols-[1fr_1fr_auto]">
+        ${
+          account.saldoDeuda > 0
+            ? `<form id="customer-account-payment-form" class="grid gap-3 rounded-xl bg-[#f7f9f6] p-4 sm:grid-cols-[1fr_1fr_auto]">
           <label class="form-label">Nuevo abono ($)<input class="form-input mt-1" name="amount" type="number" min="0.01" max="${account.saldoDeuda.toFixed(2)}" step="0.01" required /></label>
           <label class="form-label">Método<select class="form-input mt-1" name="method"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></label>
           <button type="submit" class="primary-button self-end">Registrar abono</button>
-        </form>` : ""}
+        </form>`
+            : ""
+        }
       </div>
       <div class="flex justify-end border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="customer-account-modal">Cerrar</button></div>`;
     if (!dialog.open) dialog.showModal();
@@ -1337,7 +1369,10 @@ function renderProducts(): void {
   const filtered = [...products, ...editedProductSnapshots.values()].filter(
     (product) =>
       `${product.name} ${product.sku} ${product.barcode} ${product.variants
-        .map((variant) => `${variantLabel(variant)} ${variant.sku} ${variant.barcode} ${variant.legacyBarcode ?? ""}`)
+        .map(
+          (variant) =>
+            `${variantLabel(variant)} ${variant.sku} ${variant.barcode} ${variant.legacyBarcode ?? ""}`,
+        )
         .join(" ")}`
         .toLowerCase()
         .includes(search) &&
@@ -1358,7 +1393,9 @@ function renderProducts(): void {
       <td class="font-mono text-xs text-slate-400">${escapeHtml(product.sku)}</td>
       <td><div class="flex flex-wrap gap-1">${product.variants
         .map(
-          (variant) => `<span class="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[10px]">
+          (
+            variant,
+          ) => `<span class="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[10px]">
             <span class="font-semibold text-slate-600">${escapeHtml(variantLabel(variant))} · ${variant.stock}</span>
             <button class="font-mono text-blue-700 hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variantLabel(variant))}">${escapeHtml(variant.barcode)}</button>
             <button class="font-bold text-blue-700" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variantLabel(variant))}">＋</button>
@@ -1500,9 +1537,7 @@ function renderCart(): void {
         entry.presentation,
         entry.item.variant,
       ) * entry.quantity;
-    return (
-      sum + Math.round(lineSubtotal * entry.discountPercentage) / 100
-    );
+    return sum + Math.round(lineSubtotal * entry.discountPercentage) / 100;
   }, 0);
   const subtotalAfterProductDiscount =
     Math.round((subtotal - productDiscountAmount) * 100) / 100;
@@ -1516,9 +1551,7 @@ function renderCart(): void {
     ? Math.round(subtotalAfterProductDiscount * discountPercentage) / 100
     : 0;
   const total =
-    Math.round(
-      (subtotalAfterProductDiscount - discountAmount) * 100,
-    ) / 100;
+    Math.round((subtotalAfterProductDiscount - discountAmount) * 100) / 100;
   const desiredTotalInput = byId<HTMLInputElement>("sale-total-desired");
   const desiredTotalValue = desiredTotalInput?.value ?? "";
   const desiredTotal = Number(desiredTotalValue);
@@ -1536,24 +1569,19 @@ function renderCart(): void {
   }
   if (items)
     items.innerHTML = entries
-      .map(
-        ({ item, quantity, presentation, key, discountPercentage }) => {
-          const unidades = presentationUnits(item.product, presentation);
-          const maximum = availableForCart(
-            item.variant,
-            unidades,
-            key,
-          );
-          const linePrice = presentationPrice(
-            item.product,
-            presentation,
-            item.variant,
-          );
-          const lineDiscount =
-            Math.round(linePrice * quantity * discountPercentage) / 100;
-          const lineTotal =
-            Math.round((linePrice * quantity - lineDiscount) * 100) / 100;
-          return `
+      .map(({ item, quantity, presentation, key, discountPercentage }) => {
+        const unidades = presentationUnits(item.product, presentation);
+        const maximum = availableForCart(item.variant, unidades, key);
+        const linePrice = presentationPrice(
+          item.product,
+          presentation,
+          item.variant,
+        );
+        const lineDiscount =
+          Math.round(linePrice * quantity * discountPercentage) / 100;
+        const lineTotal =
+          Math.round((linePrice * quantity - lineDiscount) * 100) / 100;
+        return `
     <article class="space-y-3 rounded-xl border border-[#e8ece7] bg-white p-3 shadow-sm">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
@@ -1578,8 +1606,7 @@ function renderCart(): void {
         </div>
       </div>
     </article>`;
-        },
-      )
+      })
       .join("");
   byId("cart-count")!.textContent = String(itemCount);
   byId("cart-peek-total")!.textContent = currency.format(total);
@@ -1642,15 +1669,15 @@ function renderCart(): void {
       ? "El descuento debe estar entre 0% y 100%."
       : !desiredTotalValid
         ? "El total deseado debe coincidir con el total de la venta y no superar el subtotal con descuentos por producto."
-      : !hasCustomer
-      ? "Selecciona un cliente para completar la venta."
-      : entries.length === 0
-        ? "Agrega productos para continuar."
-        : editingSaleId
-          ? "Las existencias se ajustarán al guardar los cambios."
-          : isCredit
-            ? "Al confirmar se entregan los productos y se registra la deuda pendiente."
-            : "El stock se actualizará al confirmar la venta.";
+        : !hasCustomer
+          ? "Selecciona un cliente para completar la venta."
+          : entries.length === 0
+            ? "Agrega productos para continuar."
+            : editingSaleId
+              ? "Las existencias se ajustarán al guardar los cambios."
+              : isCredit
+                ? "Al confirmar se entregan los productos y se registra la deuda pendiente."
+                : "El stock se actualizará al confirmar la venta.";
   }
 }
 
@@ -1692,9 +1719,7 @@ function availableForCart(
     if (excludedKeys.has(key)) continue;
     const parsed = parseCartKey(key);
     if (parsed.variantId !== variant.id) continue;
-    remaining -=
-      quantity *
-      presentationUnits(product, parsed.presentation);
+    remaining -= quantity * presentationUnits(product, parsed.presentation);
   }
   return Math.max(0, Math.floor(remaining / unitsPerPresentation));
 }
@@ -1963,9 +1988,7 @@ function exportSalesCsv(): void {
       .join(" | "),
     sale.items.reduce((sum, item) => sum + item.quantity, 0),
     sale.subtotal.toFixed(2),
-    sale.items
-      .reduce((sum, item) => sum + item.discountAmount, 0)
-      .toFixed(2),
+    sale.items.reduce((sum, item) => sum + item.discountAmount, 0).toFixed(2),
     sale.discountPercentage.toFixed(6),
     sale.discountAmount.toFixed(2),
     sale.total.toFixed(2),
@@ -2262,7 +2285,18 @@ function openMovementFor(variantId?: number): void {
     )
     .join("");
   if (variantId) select.value = String(variantId);
+  updateMovementDescriptionVisibility();
   dialog.showModal();
+}
+
+function updateMovementDescriptionVisibility(): void {
+  const type = byId<HTMLSelectElement>(
+    "movement-form",
+  )?.querySelector<HTMLSelectElement>('select[name="type"]')?.value;
+  byId("movement-description-field")?.classList.toggle(
+    "hidden",
+    type !== "Salida",
+  );
 }
 
 function renderCustomers(selectedId?: number): void {
@@ -2354,12 +2388,14 @@ function openProductEditor(productId: number): void {
   data.set("productId", String(product.id));
   data.set("name", productNameWithoutColor(product));
   data.set("price", String(product.price));
-  data.set("unitsPerBox", product.unitsPerBox ? String(product.unitsPerBox) : "");
+  data.set(
+    "unitsPerBox",
+    product.unitsPerBox ? String(product.unitsPerBox) : "",
+  );
   data.set("boxPrice", product.boxPrice ? String(product.boxPrice) : "");
   form.reset();
   renderCategoryOptions(product.categoryId);
-  const sellsByBox =
-    product.unitsPerBox !== null && product.boxPrice !== null;
+  const sellsByBox = product.unitsPerBox !== null && product.boxPrice !== null;
   const boxToggle = byId<HTMLInputElement>("product-sells-by-box");
   if (boxToggle) boxToggle.checked = sellsByBox;
   renderProductVariantFields(product.variants);
@@ -2417,7 +2453,9 @@ function scanBarcode(value: string): void {
   if (!item) {
     notify(`No encontramos un producto con el código ${code}.`);
   } else if (item.variant.stock < 1) {
-    notify(`${item.product.name} ${variantLabel(item.variant)} no tiene existencias.`);
+    notify(
+      `${item.product.name} ${variantLabel(item.variant)} no tiene existencias.`,
+    );
   } else {
     addProductToCart(item.variant.id);
     byId<HTMLInputElement>("barcode-input")?.focus();
@@ -2722,15 +2760,19 @@ byId("product-form")?.addEventListener("submit", async (event) => {
     notify("No encontramos el producto que intentas editar.");
     return;
   }
-  if (!variants.length || variants.some((variant) =>
-    !Number.isInteger(variant.existencia) ||
-    variant.existencia < 0 ||
-    !Number.isInteger(variant.stockMinimo) ||
-    variant.stockMinimo < 0 ||
-    typeof variant.precio !== "number" ||
-    !Number.isFinite(variant.precio) ||
-    variant.precio <= 0
-  )) {
+  if (
+    !variants.length ||
+    variants.some(
+      (variant) =>
+        !Number.isInteger(variant.existencia) ||
+        variant.existencia < 0 ||
+        !Number.isInteger(variant.stockMinimo) ||
+        variant.stockMinimo < 0 ||
+        typeof variant.precio !== "number" ||
+        !Number.isFinite(variant.precio) ||
+        variant.precio <= 0,
+    )
+  ) {
     notify("Configura variantes con precio y valores de stock válidos.");
     return;
   }
@@ -2846,6 +2888,7 @@ byId("movement-form")?.addEventListener("submit", async (event) => {
   const variantId = Number(data.get("variantId"));
   const quantity = Number(data.get("quantity"));
   const type = String(data.get("type")) as "Ingreso" | "Salida";
+  const description = String(data.get("description") ?? "").trim();
   const item = variantFor(variantId);
   if (!item || !Number.isInteger(quantity) || quantity < 1) {
     notify("Selecciona un producto con talla y una cantidad válida.");
@@ -2858,9 +2901,13 @@ byId("movement-form")?.addEventListener("submit", async (event) => {
         varianteId: variantId,
         tipo: type,
         cantidad: quantity,
+        ...(type === "Salida" && description
+          ? { descripcion: description }
+          : {}),
       }),
     });
     form.reset();
+    updateMovementDescriptionVisibility();
     byId<HTMLDialogElement>("movement-modal")?.close();
     await loadDashboardData();
     notify(`${type} de ${quantity} unidades registrado.`);
@@ -2873,28 +2920,30 @@ byId("movement-form")?.addEventListener("submit", async (event) => {
   }
 });
 
+byId<HTMLFormElement>("movement-form")
+  ?.querySelector<HTMLSelectElement>('select[name="type"]')
+  ?.addEventListener("change", updateMovementDescriptionVisibility);
+
 byId("product-category")?.addEventListener("change", () =>
   renderProductVariantFields(),
 );
 byId("product-sells-by-box")?.addEventListener("change", () =>
   renderProductVariantFields(),
 );
-byId<HTMLInputElement>("product-price")?.addEventListener(
-  "input",
-  (event) => {
-    const basePrice = (event.currentTarget as HTMLInputElement).value;
-    byId("product-size-prices")
-      ?.querySelectorAll<HTMLInputElement>(
-        '[data-size-price-default="true"]',
-      )
-      .forEach((input) => {
-        input.value = basePrice;
-      });
-  },
-);
+byId<HTMLInputElement>("product-price")?.addEventListener("input", (event) => {
+  const basePrice = (event.currentTarget as HTMLInputElement).value;
+  byId("product-size-prices")
+    ?.querySelectorAll<HTMLInputElement>('[data-size-price-default="true"]')
+    .forEach((input) => {
+      input.value = basePrice;
+    });
+});
 byId("product-size-prices")?.addEventListener("input", (event) => {
   const target = event.target;
-  if (target instanceof HTMLInputElement && target.matches("[data-size-price]")) {
+  if (
+    target instanceof HTMLInputElement &&
+    target.matches("[data-size-price]")
+  ) {
     target.dataset.sizePriceDefault = "false";
   }
 });
@@ -2977,9 +3026,7 @@ byId("sale-total-desired")?.addEventListener("input", (event) => {
       presentationPrice(item.product, presentation, item.variant) * quantity;
     subtotal += lineSubtotal;
     productDiscount +=
-      Math.round(
-        lineSubtotal * (cartProductDiscounts.get(key) ?? 0),
-      ) / 100;
+      Math.round(lineSubtotal * (cartProductDiscounts.get(key) ?? 0)) / 100;
   }
   const subtotalAfterProductDiscount =
     Math.round((subtotal - productDiscount) * 100) / 100;
@@ -3073,9 +3120,11 @@ document.addEventListener("click", async (event) => {
       (item) => item.id === Number(editSize.dataset.sizeEdit),
     );
     if (!size) return;
-    (byId<HTMLFormElement>("talla-form")!.elements.namedItem(
-      "sizeId",
-    ) as HTMLInputElement).value = String(size.id);
+    (
+      byId<HTMLFormElement>("talla-form")!.elements.namedItem(
+        "sizeId",
+      ) as HTMLInputElement
+    ).value = String(size.id);
     byId<HTMLInputElement>("size-name")!.value = size.nombre;
     byId("size-form-label")!.textContent = "Editar talla";
     byId("save-size-button")!.textContent = "Guardar cambios";
@@ -3097,7 +3146,9 @@ document.addEventListener("click", async (event) => {
       notify("Talla eliminada.");
     } catch (cause) {
       notify(
-        cause instanceof Error ? cause.message : "No se pudo eliminar la talla.",
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo eliminar la talla.",
       );
     }
     return;
@@ -3108,9 +3159,11 @@ document.addEventListener("click", async (event) => {
       (item) => item.id === Number(editColor.dataset.colorEdit),
     );
     if (!color) return;
-    (byId<HTMLFormElement>("color-form")!.elements.namedItem(
-      "colorId",
-    ) as HTMLInputElement).value = String(color.id);
+    (
+      byId<HTMLFormElement>("color-form")!.elements.namedItem(
+        "colorId",
+      ) as HTMLInputElement
+    ).value = String(color.id);
     byId<HTMLInputElement>("color-name")!.value = color.nombre;
     byId("color-form-label")!.textContent = "Editar color";
     byId("save-color-button")!.textContent = "Guardar cambios";
@@ -3132,7 +3185,9 @@ document.addEventListener("click", async (event) => {
       notify("Color eliminado.");
     } catch (cause) {
       notify(
-        cause instanceof Error ? cause.message : "No se pudo eliminar el color.",
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo eliminar el color.",
       );
     }
     return;
@@ -3145,7 +3200,9 @@ document.addEventListener("click", async (event) => {
     if (customer) renderCustomers(customer.id);
     return;
   }
-  const customerAccount = target.closest<HTMLElement>("[data-customer-account]");
+  const customerAccount = target.closest<HTMLElement>(
+    "[data-customer-account]",
+  );
   if (customerAccount) {
     await openCustomerAccount(Number(customerAccount.dataset.customerAccount));
     return;
@@ -3378,7 +3435,9 @@ document.addEventListener("click", async (event) => {
     const sale = sales.find((item) => item.id === editSale.dataset.saleEdit);
     if (!sale) return;
     if (sale.payment === "Crédito") {
-      notify("Las ventas a crédito no se pueden editar; revisa la cuenta del cliente.");
+      notify(
+        "Las ventas a crédito no se pueden editar; revisa la cuenta del cliente.",
+      );
       return;
     }
     editingSaleId = sale.id;
@@ -3442,7 +3501,9 @@ document.addEventListener("click", async (event) => {
 
 byId("cart-items")?.addEventListener("change", (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) {
+  if (!(
+    target instanceof HTMLInputElement || target instanceof HTMLSelectElement
+  )) {
     return;
   }
   const productDiscountInput = target.closest<HTMLInputElement>(
@@ -3451,11 +3512,7 @@ byId("cart-items")?.addEventListener("change", (event) => {
   if (productDiscountInput) {
     const key = productDiscountInput.dataset.cartProductDiscount ?? "";
     const percentage = Number(productDiscountInput.value);
-    if (
-      !Number.isFinite(percentage) ||
-      percentage < 0 ||
-      percentage > 100
-    ) {
+    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
       notify("El descuento del producto debe estar entre 0% y 100%.");
       renderCart();
       return;
@@ -3495,7 +3552,9 @@ byId("cart-items")?.addEventListener("change", (event) => {
   if (!presentationSelect) return;
   const variantId = Number(presentationSelect.dataset.cartPresentation);
   const previous =
-    presentationSelect.dataset.currentPresentation === "CAJA" ? "CAJA" : "UNIDAD";
+    presentationSelect.dataset.currentPresentation === "CAJA"
+      ? "CAJA"
+      : "UNIDAD";
   const next = presentationSelect.value === "CAJA" ? "CAJA" : "UNIDAD";
   const item = variantFor(variantId);
   const previousKey = cartKey(variantId, previous);
@@ -3626,11 +3685,8 @@ async function confirmSale(pendingSale: Sale): Promise<void> {
     const key = cartKey(item.variantId, item.presentation);
     return (
       product &&
-      availableForCart(
-        product.variant,
-        item.unitsPerPresentation,
-        key,
-      ) >= item.quantity
+      availableForCart(product.variant, item.unitsPerPresentation, key) >=
+        item.quantity
     );
   });
   if (!quantitiesMatch || !stockAvailable) {
@@ -3744,31 +3800,24 @@ byId("complete-sale")?.addEventListener("click", () => {
       presentation,
       unitsPerPresentation,
       quantity,
-      price: presentationPrice(
-        item.product,
-        presentation,
-        item.variant,
-      ),
-        discountPercentage: cartProductDiscounts.get(key) ?? 0,
-        discountAmount: 0,
-      });
-    }
-    for (const item of items) {
-      item.discountAmount =
-        Math.round(
-          item.quantity * item.price * item.discountPercentage,
-        ) / 100;
-    }
-    const subtotal = Math.round(items.reduce(
-      (sum, item) => sum + item.quantity * item.price,
-    0,
-    ) * 100) / 100;
-    const subtotalAfterProductDiscount =
-      Math.round(
-        (subtotal -
-          items.reduce((sum, item) => sum + item.discountAmount, 0)) *
-          100,
-      ) / 100;
+      price: presentationPrice(item.product, presentation, item.variant),
+      discountPercentage: cartProductDiscounts.get(key) ?? 0,
+      discountAmount: 0,
+    });
+  }
+  for (const item of items) {
+    item.discountAmount =
+      Math.round(item.quantity * item.price * item.discountPercentage) / 100;
+  }
+  const subtotal =
+    Math.round(
+      items.reduce((sum, item) => sum + item.quantity * item.price, 0) * 100,
+    ) / 100;
+  const subtotalAfterProductDiscount =
+    Math.round(
+      (subtotal - items.reduce((sum, item) => sum + item.discountAmount, 0)) *
+        100,
+    ) / 100;
   const discountPercentage = Number(
     byId<HTMLInputElement>("sale-discount")?.value ?? 0,
   );
@@ -3784,7 +3833,8 @@ byId("complete-sale")?.addEventListener("click", () => {
     Math.round(subtotalAfterProductDiscount * discountPercentage) / 100;
   const total =
     Math.round((subtotalAfterProductDiscount - discountAmount) * 100) / 100;
-  const payment = byId<HTMLSelectElement>("payment-method")?.value ?? "Efectivo";
+  const payment =
+    byId<HTMLSelectElement>("payment-method")?.value ?? "Efectivo";
   const initialPayment =
     payment === "Crédito"
       ? Number(byId<HTMLInputElement>("initial-payment-amount")?.value ?? 0)
