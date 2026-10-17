@@ -1839,6 +1839,7 @@ function renderSales(): void {
         <div class="flex items-center justify-end gap-1">
         ${sale.payment === "Crédito" ? '<button class="sale-action cursor-not-allowed opacity-45" type="button" disabled title="Las ventas a crédito no se pueden editar">No editable</button>' : `<button class="sale-action" data-sale-edit="${escapeHtml(sale.id)}">Editar</button>`}
           <button class="sale-action" data-sale-print="${escapeHtml(sale.id)}">Imprimir</button>
+          ${currentUser?.rol === "ADMIN" ? `<button class="sale-action text-rose-600" type="button" data-sale-delete="${escapeHtml(sale.id)}">Eliminar</button>` : ""}
         </div>
       </td>
     </tr>`,
@@ -3463,6 +3464,36 @@ document.addEventListener("click", async (event) => {
   if (salePrint) {
     const sale = sales.find((item) => item.id === salePrint.dataset.salePrint);
     if (sale) openSaleReceipt(sale);
+    return;
+  }
+  const deleteSale = target.closest<HTMLElement>("[data-sale-delete]");
+  if (deleteSale) {
+    if (currentUser?.rol !== "ADMIN") return;
+    const sale = sales.find((item) => item.id === deleteSale.dataset.saleDelete);
+    if (!sale) return;
+    if (
+      !window.confirm(
+        `¿Eliminar la venta ${sale.id} de "${sale.customerName}"?\n\nSe eliminarán sus artículos y abonos, y se restaurará el stock vendido.`,
+      )
+    ) {
+      return;
+    }
+    const saleId = Number(sale.id.replace(/^V-/, ""));
+    if (!Number.isSafeInteger(saleId) || saleId <= 0) {
+      notify("No se pudo identificar la venta.");
+      return;
+    }
+    try {
+      await inventoryRequest(`/ventas/${saleId}`, { method: "DELETE" });
+      await loadDashboardData(["core", "movements"]);
+      notify(`Venta ${sale.id} eliminada y stock restaurado.`);
+    } catch (cause) {
+      notify(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo eliminar la venta.",
+      );
+    }
     return;
   }
   const editSale = target.closest<HTMLElement>("[data-sale-edit]");
