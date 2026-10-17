@@ -137,10 +137,42 @@ let realtimeHasConnected = false;
 let openCustomerAccountId: number | null = null;
 let pendingProductDeleteId: number | null = null;
 const apiUrl = import.meta.env.PUBLIC_API_URL ?? "http://localhost:3000";
+
+function clearPendingProductDelete(): void {
+  pendingProductDeleteId = null;
+  const name = byId("delete-product-name");
+  if (name) name.textContent = "";
+}
+
+function resetProductFormState(): void {
+  const form = byId<HTMLFormElement>("product-form");
+  if (!form) return;
+  form.reset();
+  const hiddenProductId = form.elements.namedItem("productId") as HTMLInputElement | null;
+  if (hiddenProductId) hiddenProductId.value = "";
+  const boxToggle = byId<HTMLInputElement>("product-sells-by-box");
+  if (boxToggle) boxToggle.checked = false;
+  const skuDisplay = byId<HTMLInputElement>("product-sku-display");
+  if (skuDisplay) skuDisplay.value = "Se asignará al guardar";
+  byId("product-modal-title")!.textContent = "Nuevo producto";
+  byId("save-product-button")!.textContent = "Guardar producto";
+  renderCategoryOptions();
+  renderProductVariantFields([]);
+}
+
 byId<HTMLDialogElement>("customer-account-modal")?.addEventListener(
   "close",
   () => {
     openCustomerAccountId = null;
+  },
+);
+byId<HTMLDialogElement>("product-modal")?.addEventListener("close", () => {
+  resetProductFormState();
+});
+byId<HTMLDialogElement>("delete-product-modal")?.addEventListener(
+  "close",
+  () => {
+    clearPendingProductDelete();
   },
 );
 const currency = new Intl.NumberFormat("es-EC", {
@@ -366,6 +398,7 @@ document
 setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
 
 function showLogin(message = ""): void {
+  clearPendingProductDelete();
   currentUser = null;
   viewSwitchGeneration += 1;
   inventoryDataGeneration += 1;
@@ -2380,6 +2413,7 @@ function showBarcode(product: Product, variant: ProductVariant): void {
 }
 
 function openProductEditor(productId: number): void {
+  clearPendingProductDelete();
   const product = productFor(productId);
   const form = byId<HTMLFormElement>("product-form");
   const dialog = byId<HTMLDialogElement>("product-modal");
@@ -2411,6 +2445,7 @@ function openProductEditor(productId: number): void {
 }
 
 function openNewProductForm(): void {
+  clearPendingProductDelete();
   const form = byId<HTMLFormElement>("product-form");
   if (!form) return;
   form.reset();
