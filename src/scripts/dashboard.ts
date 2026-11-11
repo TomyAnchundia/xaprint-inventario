@@ -668,6 +668,13 @@ function renderSummary(): void {
   const lowStock = products.filter((product) =>
     product.variants.some((variant) => variant.stock <= variant.minStock),
   );
+  const lowStockVariantCount = lowStock.reduce(
+    (count, product) =>
+      count +
+      product.variants.filter((variant) => variant.stock <= variant.minStock)
+        .length,
+    0,
+  );
   const setText = (id: string, text: string) => {
     const node = byId(id);
     if (node) node.textContent = text;
@@ -686,7 +693,10 @@ function renderSummary(): void {
   );
   setText("metric-sales-count", `${todaySales.length} transacciones`);
   setText("metric-low-stock", String(lowStock.length));
-  setText("low-stock-badge", `${lowStock.length} alertas`);
+  setText(
+    "low-stock-badge",
+    `${lowStockVariantCount} ${lowStockVariantCount === 1 ? "variante" : "variantes"}`,
+  );
   setText("sidebar-product-count", String(products.length));
 
   const lowList = byId("low-stock-list");
@@ -694,19 +704,25 @@ function renderSummary(): void {
     lowList.innerHTML = lowStock.length
       ? lowStock
           .map(
-            (
-              product,
-            ) => `<div class="flex items-center gap-3 rounded-xl px-1 py-3">
+            (product) => {
+              const lowVariants = product.variants.filter(
+                (variant) => variant.stock <= variant.minStock,
+              );
+              return `<section class="low-stock-product rounded-xl px-1 py-3">
           <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold">${escapeHtml(product.initials)}</div>
-          <div class="min-w-0 flex-1"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">Revisar: ${product.variants
-            .filter((variant) => variant.stock <= variant.minStock)
+          <div class="low-stock-product-heading"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><span>${lowVariants.length} ${lowVariants.length === 1 ? "variante" : "variantes"} bajo mínimo</span></div>
+          <div class="low-stock-variants">${lowVariants
             .map(
               (variant) =>
-                `${escapeHtml(variantLabel(variant))} (mín. ${variant.minStock})`,
+                `<div class="low-stock-variant">
+                  <span class="low-stock-variant-name">${escapeHtml(variantLabel(variant))}</span>
+                  <span class="low-stock-variant-quantity">${variant.stock} <small>uds.</small></span>
+                  <span class="low-stock-variant-minimum">Mín. ${variant.minStock}</span>
+                </div>`,
             )
-            .join(", ")}</p></div>
-          <span class="rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700">${product.stock} uds.</span>
-        </div>`,
+            .join("")}</div>
+        </section>`;
+            },
           )
           .join("")
       : '<p class="py-7 text-center text-sm text-slate-400">¡Todo está abastecido!</p>';
@@ -829,29 +845,36 @@ function collectProductVariantDrafts(): ProductVariant[] {
     ...(byId("product-variants")?.querySelectorAll<HTMLElement>(
       "[data-variant-row]",
     ) ?? []),
-  ].map((row) => {
-    const tallaId = Number(row.dataset.variantSize);
-    const sizePrice = byId(
-      "product-size-prices",
-    )?.querySelector<HTMLInputElement>(`[data-size-price="${tallaId}"]`);
-    return {
-      id: Number(row.dataset.variantId ?? 0),
-      tallaId,
-      colorId: Number(row.dataset.variantColor) || null,
-      size: row.dataset.sizeName ?? "",
-      color: row.dataset.colorName || null,
-      sku: "",
-      barcode: "",
-      stock: Number(
-        row.querySelector<HTMLInputElement>("[data-variant-stock]")?.value ?? 0,
-      ),
-      minStock: Number(
-        row.querySelector<HTMLInputElement>("[data-variant-min-stock]")
-          ?.value ?? 0,
-      ),
-      price: Number(sizePrice?.value ?? basePrice),
-    };
-  });
+  ]
+    .sort(
+      (first, second) =>
+        Number(first.dataset.variantOrder) -
+        Number(second.dataset.variantOrder),
+    )
+    .map((row) => {
+      const tallaId = Number(row.dataset.variantSize);
+      const sizePrice = byId(
+        "product-size-prices",
+      )?.querySelector<HTMLInputElement>(`[data-size-price="${tallaId}"]`);
+      return {
+        id: Number(row.dataset.variantId ?? 0),
+        tallaId,
+        colorId: Number(row.dataset.variantColor) || null,
+        size: row.dataset.sizeName ?? "",
+        color: row.dataset.colorName || null,
+        sku: "",
+        barcode: "",
+        stock: Number(
+          row.querySelector<HTMLInputElement>("[data-variant-stock]")?.value ??
+            0,
+        ),
+        minStock: Number(
+          row.querySelector<HTMLInputElement>("[data-variant-min-stock]")
+            ?.value ?? 0,
+        ),
+        price: Number(sizePrice?.value ?? basePrice),
+      };
+    });
 }
 
 function renderProductVariantFields(selectedVariants?: ProductVariant[]): void {
@@ -913,6 +936,7 @@ function renderProductVariantFields(selectedVariants?: ProductVariant[]): void {
   byId("box-options")?.classList.toggle("hidden", !isSupply);
   byId("size-options")?.classList.toggle("hidden", !isGarment);
   byId("color-options")?.classList.toggle("hidden", !isGarment);
+  byId("product-variant-order-field")?.classList.toggle("hidden", !isGarment);
   const boxToggle = byId<HTMLInputElement>("product-sells-by-box");
   const boxFields = byId("box-price-fields");
   const unitsInput = byId<HTMLFormElement>("product-form")?.elements.namedItem(
@@ -997,7 +1021,7 @@ function renderProductVariantFields(selectedVariants?: ProductVariant[]): void {
   if (isGarment && noColorSelected) activeColorIds.push(null);
   if (!activeColorIds.length) activeColorIds.push(null);
 
-  const variants = activeSizeIds.flatMap((tallaId) =>
+  const sizeFirstVariants = activeSizeIds.flatMap((tallaId) =>
     activeColorIds.map((colorId) => {
       const talla = tallas.find((item) => item.id === tallaId);
       const color = colors.find((item) => item.id === colorId);
@@ -1007,6 +1031,27 @@ function renderProductVariantFields(selectedVariants?: ProductVariant[]): void {
       return { tallaId, colorId, talla, color, previous };
     }),
   );
+  const legacyOrder = new Map(
+    sizeFirstVariants.map(
+      (variant, index) =>
+        [
+          `${variant.tallaId}:${variant.colorId ?? "none"}`,
+          index,
+        ] as const,
+    ),
+  );
+  const groupByColor =
+    byId<HTMLSelectElement>("product-variant-order")?.value === "color";
+  const variants = groupByColor
+    ? activeColorIds.flatMap((colorId) =>
+        activeSizeIds.flatMap((tallaId) => {
+          const variant = sizeFirstVariants.find(
+            (item) => item.tallaId === tallaId && item.colorId === colorId,
+          );
+          return variant ? [variant] : [];
+        }),
+      )
+    : sizeFirstVariants;
   container.innerHTML =
     variants
       .filter((variant) => variant.tallaId > 0)
@@ -1014,7 +1059,8 @@ function renderProductVariantFields(selectedVariants?: ProductVariant[]): void {
         const label = [talla?.nombre, color?.nombre]
           .filter(Boolean)
           .join(" · ");
-        return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2" data-variant-row data-variant-id="${previous?.id ?? ""}" data-variant-size="${tallaId}" data-variant-color="${colorId ?? ""}" data-variant-price="${previous?.price ?? ""}" data-size-name="${escapeHtml(talla?.nombre ?? "")}" data-color-name="${escapeHtml(color?.nombre ?? "")}">
+        const order = legacyOrder.get(`${tallaId}:${colorId ?? "none"}`) ?? 0;
+        return `<div class="grid grid-cols-[1fr_1fr_1fr] items-center gap-2 rounded-lg bg-slate-50 p-2" data-variant-row data-variant-order="${order}" data-variant-id="${previous?.id ?? ""}" data-variant-size="${tallaId}" data-variant-color="${colorId ?? ""}" data-variant-price="${previous?.price ?? ""}" data-size-name="${escapeHtml(talla?.nombre ?? "")}" data-color-name="${escapeHtml(color?.nombre ?? "")}">
         <span class="text-sm font-semibold text-slate-700">${escapeHtml(label)}</span>
         <label class="text-[10px] font-medium text-slate-500">Stock<input class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-stock value="${previous?.stock ?? 0}" /></label>
         <label class="text-[10px] font-medium text-slate-500">Mínimo<input class="form-input mt-1 h-8 px-2 text-xs" type="number" min="0" step="1" data-variant-min-stock value="${previous?.minStock ?? 5}" /></label>
@@ -1424,17 +1470,12 @@ function renderProducts(): void {
           return `<tr>
       <td><div class="flex items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${product.tone} text-[10px] font-bold">${escapeHtml(product.initials)}</span><span class="font-semibold text-slate-700">${escapeHtml(product.name)}</span></div></td>
       <td class="font-mono text-xs text-slate-400">${escapeHtml(product.sku)}</td>
-      <td><div class="flex flex-wrap gap-1">${product.variants
-        .map(
-          (
-            variant,
-          ) => `<span class="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2 py-1 text-[10px]">
-            <span class="font-semibold text-slate-600">${escapeHtml(variantLabel(variant))} · ${variant.stock}</span>
-            <button class="font-mono text-blue-700 hover:underline" data-variant-barcode="${variant.id}" title="Ver código de ${escapeHtml(variantLabel(variant))}">${escapeHtml(variant.barcode)}</button>
-            <button class="font-bold text-blue-700" data-add-stock="${variant.id}" title="Agregar stock a ${escapeHtml(variantLabel(variant))}">＋</button>
-          </span>`,
-        )
-        .join("")}</div></td>
+      <td>
+        <button type="button" class="product-variants-summary" data-product-variants="${product.id}" aria-haspopup="dialog" aria-controls="product-variants-modal" aria-label="Ver ${product.variants.length} variantes de ${escapeHtml(product.name)}">
+          <span class="product-variants-summary-count">${product.variants.length} ${product.variants.length === 1 ? "variante" : "variantes"}</span>
+          <span class="product-variants-summary-action">Ver tallas, colores y códigos</span>
+        </button>
+      </td>
       <td class="text-slate-500">${escapeHtml(product.category)}</td>
       <td class="font-semibold text-slate-700">${productPriceLabel(product)}</td>
       <td><span class="font-semibold ${low ? "text-rose-700" : "text-slate-700"}">${product.stock}</span><span class="ml-1 text-[10px] text-slate-400">uds.</span></td>
@@ -1472,6 +1513,76 @@ function renderProducts(): void {
     select.value = productCategories.includes(selected) ? selected : "";
   }
   renderSummary();
+}
+
+function renderProductVariantDetails(product: Product): void {
+  const list = byId("product-variants-list");
+  if (!list) return;
+  const query =
+    byId<HTMLInputElement>("product-variants-search")
+      ?.value.trim()
+      .toLocaleLowerCase("es") ?? "";
+  const grouped = new Map<string, ProductVariant[]>();
+  for (const variant of product.variants) {
+    const matches =
+      !query ||
+      `${variantLabel(variant)} ${variant.sku} ${variant.barcode} ${variant.stock} ${variant.minStock}`
+        .toLocaleLowerCase("es")
+        .includes(query);
+    if (!matches) continue;
+    const size = variant.size || "Única";
+    const group = grouped.get(size) ?? [];
+    group.push(variant);
+    grouped.set(size, group);
+  }
+  list.innerHTML = [...grouped]
+    .map(
+      ([size, variants]) => `
+        <section class="product-variant-group" aria-label="Talla ${escapeHtml(size)}">
+          <h3 class="product-variant-group-title">
+            <span>${escapeHtml(size)}</span>
+            <span>${variants.length} ${variants.length === 1 ? "variante" : "variantes"}</span>
+          </h3>
+          <div class="product-variant-group-items">
+            ${variants
+              .map((variant) => {
+                const low = variant.stock <= variant.minStock;
+                const out = variant.stock === 0;
+                return `<article class="product-variant-detail">
+                  <div class="product-variant-detail-main">
+                    <strong>${escapeHtml(variant.color || "Sin color")}</strong>
+                    <span class="product-variant-detail-code">${escapeHtml(variant.sku)} · ${escapeHtml(variant.barcode)}</span>
+                  </div>
+                  <div class="product-variant-detail-stock">
+                    <span class="${low ? "text-rose-700" : "text-slate-700"}">${variant.stock} uds.</span>
+                    <span class="product-variant-status ${out ? "is-out" : low ? "is-low" : "is-available"}">${out ? "Agotado" : low ? "Stock bajo" : "Disponible"}</span>
+                  </div>
+                  <div class="product-variant-detail-actions">
+                    <button type="button" class="secondary-button" data-variant-barcode="${variant.id}" aria-label="Ver código de ${escapeHtml(variantLabel(variant))}">Ver código</button>
+                    <button type="button" class="primary-button" data-add-stock="${variant.id}" aria-label="Agregar stock a ${escapeHtml(variantLabel(variant))}">＋ Stock</button>
+                  </div>
+                </article>`;
+              })
+              .join("")}
+          </div>
+        </section>`,
+    )
+    .join("");
+  byId("product-variants-empty")?.classList.toggle("hidden", grouped.size > 0);
+}
+
+function openProductVariantDetails(productId: number): void {
+  const product = productFor(productId);
+  const dialog = byId<HTMLDialogElement>("product-variants-modal");
+  const search = byId<HTMLInputElement>("product-variants-search");
+  if (!product || !dialog || !search) return;
+  dialog.dataset.productId = String(product.id);
+  byId("product-variants-title")!.textContent = product.name;
+  byId("product-variants-summary")!.textContent =
+    `${product.variants.length} ${product.variants.length === 1 ? "variante" : "variantes"} · ${product.stock} unidades en total`;
+  search.value = "";
+  renderProductVariantDetails(product);
+  dialog.showModal();
 }
 
 function renderPos(): void {
@@ -2989,6 +3100,9 @@ byId("product-sizes")?.addEventListener("change", () =>
 byId("product-colors")?.addEventListener("change", () =>
   renderProductVariantFields(),
 );
+byId("product-variant-order")?.addEventListener("change", () =>
+  renderProductVariantFields(),
+);
 
 byId("talla-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -3047,6 +3161,11 @@ byId("cancel-color-edit")?.addEventListener("click", resetColorForm);
 
 byId("product-search")?.addEventListener("input", renderProducts);
 byId("category-filter")?.addEventListener("change", renderProducts);
+byId("product-variants-search")?.addEventListener("input", () => {
+  const dialog = byId<HTMLDialogElement>("product-variants-modal");
+  const product = productFor(Number(dialog?.dataset.productId));
+  if (product) renderProductVariantDetails(product);
+});
 byId("pos-search")?.addEventListener("input", renderPos);
 byId("payment-method")?.addEventListener("change", renderCart);
 byId("sale-discount")?.addEventListener("input", renderCart);
@@ -3385,7 +3504,19 @@ document.addEventListener("click", async (event) => {
   }
   const addStock = target.closest<HTMLElement>("[data-add-stock]");
   if (addStock) {
+    if (addStock.closest("#product-variants-modal")) {
+      byId<HTMLDialogElement>("product-variants-modal")?.close();
+    }
     openMovementFor(Number(addStock.dataset.addStock));
+    return;
+  }
+  const showProductVariants = target.closest<HTMLElement>(
+    "[data-product-variants]",
+  );
+  if (showProductVariants) {
+    openProductVariantDetails(
+      Number(showProductVariants.dataset.productVariants),
+    );
     return;
   }
   const editProduct = target.closest<HTMLElement>("[data-product-edit]");
@@ -3445,6 +3576,9 @@ document.addEventListener("click", async (event) => {
   }
   const variantBarcode = target.closest<HTMLElement>("[data-variant-barcode]");
   if (variantBarcode) {
+    if (variantBarcode.closest("#product-variants-modal")) {
+      byId<HTMLDialogElement>("product-variants-modal")?.close();
+    }
     const item = variantFor(Number(variantBarcode.dataset.variantBarcode));
     if (item) showBarcode(item.product, item.variant);
     return;

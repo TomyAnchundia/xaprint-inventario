@@ -27,11 +27,47 @@
       <fieldset class="sm:col-span-2">
         <legend id="product-variants-label" class="form-label mb-2">Variantes y existencias iniciales</legend>
         <p class="mb-2 text-xs text-slate-500">Configura el precio de cada talla. Cada combinación de talla y color tendrá su propio stock y mínimo.</p>
+        <label id="product-variant-order-field" class="form-label mb-2 block">Orden de las variantes
+          <select id="product-variant-order" class="form-input mt-1">
+            <option value="size">Agrupar por talla</option>
+            <option value="color">Agrupar por color</option>
+          </select>
+        </label>
         <div id="product-variants" class="max-h-64 space-y-2 overflow-y-auto rounded-xl border border-[#edf0ec] p-3"><p class="text-xs text-slate-400">Configura tallas o colores para administrar sus existencias.</p></div>
       </fieldset>
     </div>
     <div class="flex justify-end gap-2 border-t border-[#edf0ec] p-4"><button type="button" class="secondary-button" data-close="product-modal">Cancelar</button><button id="save-product-button" type="submit" class="primary-button">Guardar producto</button></div>
   </form>
+</dialog>
+
+<dialog
+  id="product-variants-modal"
+  class="modal-card w-[min(820px,calc(100%-2rem))]"
+  aria-labelledby="product-variants-title"
+>
+  <div class="modal-heading">
+    <div class="min-w-0">
+      <h2 id="product-variants-title" class="truncate text-lg font-bold">Variantes del producto</h2>
+      <p id="product-variants-summary" class="mt-1 text-xs text-slate-500"></p>
+    </div>
+    <button type="button" class="modal-close" data-close="product-variants-modal" aria-label="Cerrar">✕</button>
+  </div>
+  <div class="space-y-4 p-4 sm:p-5">
+    <label class="search-field">
+      <span class="search-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="10.8" cy="10.8" r="6.8"></circle>
+          <path stroke-linecap="round" d="m16 16 4.5 4.5"></path>
+        </svg>
+      </span>
+      <input id="product-variants-search" class="search-input" type="search" aria-label="Buscar variantes" placeholder="Buscar por talla, color, SKU o código..." />
+    </label>
+    <div id="product-variants-list" class="product-variants-list"></div>
+    <p id="product-variants-empty" class="hidden py-8 text-center text-sm text-slate-500">No encontramos variantes con esa búsqueda.</p>
+  </div>
+  <div class="flex justify-end border-t border-[#edf0ec] p-4">
+    <button type="button" class="secondary-button" data-close="product-variants-modal">Cerrar</button>
+  </div>
 </dialog>
 
 <dialog id="colores-modal" class="modal-card w-[min(430px,calc(100%-2rem))]">
