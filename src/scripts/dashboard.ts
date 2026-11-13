@@ -9,6 +9,7 @@ import {
   type InventoryUser,
   vigilarExpiracionInventario,
 } from "../services/api";
+import { matchesPosSearch, parsePosSearch } from "../utils/pos-search";
 
 interface Product {
   id: number;
@@ -1587,16 +1588,28 @@ function openProductVariantDetails(productId: number): void {
 
 function renderPos(): void {
   const search =
-    byId<HTMLInputElement>("pos-search")?.value.trim().toLowerCase() ?? "";
+    byId<HTMLInputElement>("pos-search")?.value.trim() ?? "";
+  const searchQuery = parsePosSearch(search);
   const editedSale = sales.find((sale) => sale.id === editingSaleId);
   const filtered = products.flatMap((product) =>
     product.variants
       .filter(
         (variant) =>
           availableForSale(variant, editedSale) > 0 &&
-          `${product.name} ${product.sku} ${product.barcode} ${variantLabel(variant)} ${variant.sku} ${variant.barcode}`
-            .toLowerCase()
-            .includes(search) &&
+          matchesPosSearch(
+            {
+              productName: product.name,
+              category: product.category,
+              productSku: product.sku,
+              productBarcode: product.barcode,
+              variantSize: variant.size,
+              variantColor: variant.color,
+              variantSku: variant.sku,
+              variantBarcode: variant.barcode,
+              legacyBarcode: variant.legacyBarcode,
+            },
+            searchQuery,
+          ) &&
           (activeCategory === "Todas" || product.category === activeCategory),
       )
       .map((variant) => ({ product, variant })),
@@ -1606,16 +1619,18 @@ function renderPos(): void {
     container.innerHTML = filtered
       .map(
         ({ product, variant }) => `
-    <button class="product-tile group text-left" data-cart-add="${variant.id}" aria-label="Agregar ${escapeHtml(product.name)} ${escapeHtml(variantLabel(variant))} a la venta">
-      <div class="flex h-28 items-center justify-center rounded-xl ${product.tone} transition group-hover:brightness-[0.98]">
-        <span class="text-2xl font-black tracking-wide opacity-70">${escapeHtml(variantLabel(variant))}</span>
+    <button type="button" class="product-tile pos-product-card group text-left" data-cart-add="${variant.id}" aria-label="Agregar ${escapeHtml(product.name)} ${escapeHtml(variantLabel(variant))} a la venta">
+      <div class="pos-product-card-top">
+        <span class="pos-product-variant">${escapeHtml(variantLabel(variant))}</span>
+        <span class="pos-product-stock">${availableForSale(variant, editedSale)} disponibles</span>
       </div>
-      <div class="mt-3 flex items-start justify-between gap-2">
-        <div class="min-w-0"><p class="truncate text-xs font-semibold text-slate-700">${escapeHtml(product.name)}</p><p class="mt-1 text-[10px] text-slate-400">${escapeHtml(variantLabel(variant))} · ${availableForSale(variant, editedSale)} disponibles</p></div>
-        <span class="pos-product-price shrink-0 text-right text-xs font-bold">${currency.format(variant.price ?? product.price)}${product.unitsPerBox && product.boxPrice ? `<small class="pos-box-price block text-[9px] font-medium text-slate-400">${currency.format(product.boxPrice)} / caja</small>` : ""}</span>
-      </div>
-      <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[10px] font-semibold text-blue-700">
-        <span>Agregar a la venta</span><span class="text-base leading-none" aria-hidden="true">＋</span>
+      <p class="pos-product-name">${escapeHtml(product.name)}</p>
+      <div class="pos-product-card-bottom">
+        <div class="min-w-0">
+          <span class="pos-product-price">${currency.format(variant.price ?? product.price)}</span>
+          ${product.unitsPerBox && product.boxPrice ? `<small class="pos-box-price">${currency.format(product.boxPrice)} / caja</small>` : ""}
+        </div>
+        <span class="pos-product-add" aria-hidden="true">＋</span>
       </div>
     </button>
   `,
@@ -1662,6 +1677,13 @@ function renderCart(): void {
       } => Boolean(entry.item),
     );
   const items = byId("cart-items");
+  const openOptions = new Set(
+    Array.from(
+      items?.querySelectorAll<HTMLDetailsElement>(
+        "details[data-cart-options][open]",
+      ) ?? [],
+    ).map((details) => details.dataset.cartOptions ?? ""),
+  );
   const itemCount = entries.reduce((total, entry) => total + entry.quantity, 0);
   const subtotal = entries.reduce(
     (sum, entry) =>
@@ -1726,28 +1748,33 @@ function renderCart(): void {
         const lineTotal =
           Math.round((linePrice * quantity - lineDiscount) * 100) / 100;
         return `
-    <article class="space-y-3 rounded-xl border border-[#e8ece7] bg-white p-3 shadow-sm">
-      <div class="flex items-start justify-between gap-3">
+    <article class="sale-line-item">
+      <div class="sale-line-header">
         <div class="min-w-0">
-          <p class="wrap-break-word text-xs font-semibold leading-4 text-slate-700">${escapeHtml(item.product.name)}</p>
-          <p class="mt-1 text-[10px] text-slate-500">${escapeHtml(variantLabel(item.variant))} · ${currency.format(linePrice)} por ${presentation === "CAJA" ? "caja" : "unidad"}</p>
+          <p class="sale-line-name">${escapeHtml(item.product.name)}</p>
+          <p class="sale-line-meta">${escapeHtml(variantLabel(item.variant))} · ${currency.format(linePrice)} / ${presentation === "CAJA" ? `caja (${unidades} u.)` : "unidad"}</p>
         </div>
-        <button class="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500" type="button" data-cart-remove="${key}" aria-label="Quitar ${escapeHtml(item.product.name)} de la venta">
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12m-10 0 .7 13h6.6L16 7M9 7V4h6v3m-5 4v5m4-5v5"/></svg>
-          Quitar
-        </button>
+        <div class="sale-line-total-group">
+          <strong class="cart-line-total">${currency.format(lineTotal)}</strong>
+          ${discountPercentage > 0 ? `<small class="sale-line-discount">−${currency.format(lineDiscount)} (${discountPercentage}%)</small>` : ""}
+          <button class="sale-line-remove" type="button" data-cart-remove="${key}" aria-label="Quitar ${escapeHtml(item.product.name)} ${escapeHtml(variantLabel(item.variant))} de la venta" title="Quitar artículo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16m-10 4v6m4-6v6M5 7l1 13h12l1-13M9 7V4h6v3"></path></svg>
+          </button>
+        </div>
       </div>
-      <div class="flex flex-wrap items-end justify-between gap-3 border-t border-slate-100 pt-2">
-        <div class="flex flex-wrap items-end gap-3">
-          ${item.product.unitsPerBox && item.product.boxPrice ? `<label class="text-[10px] font-medium text-slate-500">Presentación<select class="form-input mt-1 h-8 w-28 px-2 text-xs" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox})</option></select></label>` : ""}
-          <label class="text-[10px] font-medium text-slate-500" for="cart-quantity-${key}">Cantidad<input id="cart-quantity-${key}" class="form-input mt-1 h-8 w-20 px-2 text-center text-xs" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" /></label>
-          <label class="text-[10px] font-medium text-slate-500">Desc. producto (%)<input class="form-input mt-1 h-8 w-24 px-2 text-center text-xs" type="number" min="0" max="100" step="0.01" value="${discountPercentage}" data-cart-product-discount="${key}" aria-label="Descuento de ${escapeHtml(item.product.name)} en porcentaje" /></label>
-        </div>
-        <div class="ml-auto text-right">
-          ${discountPercentage > 0 ? `<p class="text-[10px] font-semibold text-rose-600">Descuento ${discountPercentage}% · −${currency.format(lineDiscount)}</p>` : ""}
-          <p class="cart-original-price text-[10px]">${currency.format(linePrice * quantity)} antes de descuento</p>
-          <p class="cart-line-total text-sm font-bold text-slate-800">${currency.format(lineTotal)}</p>
-        </div>
+      <div class="sale-line-controls">
+        <label class="sale-line-quantity" for="cart-quantity-${key}">
+          <span>Cant.</span>
+          <input id="cart-quantity-${key}" class="form-input" type="number" min="1" max="${maximum}" step="1" value="${quantity}" data-cart-quantity="${key}" aria-label="Cantidad de ${presentation === "CAJA" ? "cajas" : "unidades"} de ${escapeHtml(item.product.name)}" />
+        </label>
+        ${discountPercentage > 0 ? `<span class="cart-original-price">${currency.format(linePrice * quantity)} antes del descuento</span>` : ""}
+        <details class="sale-line-options" data-cart-options="${key}" ${openOptions.has(key) ? "open" : ""}>
+          <summary>Opciones</summary>
+          <div class="sale-line-option-fields">
+            ${item.product.unitsPerBox && item.product.boxPrice ? `<label>Presentación<select class="form-input" data-cart-presentation="${item.variant.id}" data-current-presentation="${presentation}"><option value="UNIDAD" ${presentation === "UNIDAD" ? "selected" : ""}>Unidad</option><option value="CAJA" ${presentation === "CAJA" ? "selected" : ""}>Caja (${item.product.unitsPerBox})</option></select></label>` : ""}
+            <label>Descuento (%)<input class="form-input" type="number" min="0" max="100" step="0.01" value="${discountPercentage}" data-cart-product-discount="${key}" aria-label="Descuento de ${escapeHtml(item.product.name)} en porcentaje" /></label>
+          </div>
+        </details>
       </div>
     </article>`;
       })
